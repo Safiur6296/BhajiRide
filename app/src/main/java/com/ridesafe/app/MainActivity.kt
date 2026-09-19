@@ -56,9 +56,20 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Prompt user to update whenever a new build is uploaded to Firebase App Distribution
         try {
-            com.google.firebase.appdistribution.FirebaseAppDistribution.getInstance().updateIfNewReleaseAvailable()
+            com.google.firebase.appdistribution.FirebaseAppDistribution.getInstance()
+                .updateIfNewReleaseAvailable()
+                .addOnSuccessListener { release ->
+                    if (release != null) {
+                        android.util.Log.d("BhaijiRide", "New release available: ${release.displayVersion} (${release.versionCode})")
+                    } else {
+                        android.util.Log.d("BhaijiRide", "Already running latest version.")
+                    }
+                }
+                .addOnFailureListener { e ->
+                    android.util.Log.w("BhaijiRide", "Firebase update check note: ${e.message}")
+                }
         } catch (e: Exception) {
-            // Silently ignore if running local debug or preview
+            android.util.Log.e("BhaijiRide", "Error invoking update check: ${e.message}")
         }
     }
 }
