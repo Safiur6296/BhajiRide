@@ -70,6 +70,7 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.maps.android.compose.rememberMarkerState
 import com.ridesafe.app.data.model.RiderStatus
 import com.ridesafe.app.ui.theme.BikerBorder
 import com.ridesafe.app.ui.theme.BikerCardBg
@@ -171,19 +172,24 @@ fun LiveMapScreen(
         }
     }
 
+    val mapProperties = remember {
+        MapProperties(isMyLocationEnabled = true)
+    }
+    val mapUiSettings = remember {
+        MapUiSettings(
+            zoomControlsEnabled = false,
+            compassEnabled = true,
+            myLocationButtonEnabled = false
+        )
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(BikerDarkBg)) {
         // 1. Interactive Google Map with live markers
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            properties = MapProperties(
-                isMyLocationEnabled = true
-            ),
-            uiSettings = MapUiSettings(
-                zoomControlsEnabled = false,
-                compassEnabled = true,
-                myLocationButtonEnabled = false
-            )
+            properties = mapProperties,
+            uiSettings = mapUiSettings
         ) {
             // Render a custom status pin for every rider in the group
             uiState.riders.forEach { riderItem ->
@@ -208,8 +214,11 @@ fun LiveMapScreen(
                         createStatusMarkerBitmap(status)
                     }
 
+                    val markerState = rememberMarkerState(key = rider.id, position = position)
+                    markerState.position = position
+
                     Marker(
-                        state = MarkerState(position = position),
+                        state = markerState,
                         title = titleText,
                         snippet = snippetText,
                         icon = markerIcon,
