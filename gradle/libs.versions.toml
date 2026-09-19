@@ -12,6 +12,7 @@ mapsCompose = "6.2.1"
 firebaseBom = "33.7.0"
 googleServices = "4.4.2"
 firebaseAppDistribution = "5.1.1"
+firebaseAppDistributionSdk = "16.0.0-beta14"
 coroutines = "1.9.0"
 
 [libraries]
@@ -37,7 +38,7 @@ maps-compose = { group = "com.google.maps.android", name = "maps-compose", versi
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-database = { group = "com.google.firebase", name = "firebase-database" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
-firebase-appdistribution = { group = "com.google.firebase", name = "firebase-appdistribution" }
+firebase-appdistribution = { group = "com.google.firebase", name = "firebase-appdistribution", version.ref = "firebaseAppDistributionSdk" }
 
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
