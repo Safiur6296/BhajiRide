@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background_dark">#121417</color>
+    <color name="primary">#FFB300</color>
+    <color name="primary_dark">#FF8F00</color>
+    <color name="surface_dark">#1E2228</color>
+    <string name="app_name">BhaijiRide</string>
+    <string name="firebase_database_url" translatable="false">https://ridesafe-a46dc-default-rtdb.firebaseio.com</string>
+    <string name="gcm_defaultSenderId" translatable="false">345773121112</string>
+    <string name="google_api_key" translatable="false">AIzaSyD00bmrop28lURGyA6QWNenxS9vpXUIVp0</string>
+    <string name="google_app_id" translatable="false">1:345773121112:android:c73030f59b40dc8306f42d</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyD00bmrop28lURGyA6QWNenxS9vpXUIVp0</string>
+    <string name="google_storage_bucket" translatable="false">ridesafe-a46dc.firebasestorage.app</string>
+    <string name="project_id" translatable="false">ridesafe-a46dc</string>
+    <string name="tracking_notification_channel_desc">Active motorbike ride location tracking service</string>
+    <string name="tracking_notification_channel_name">BhaijiRide Tracking</string>
+    <style name="Theme.RideSafe" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#121417</item>
+        <item name="android:navigationBarColor">#121417</item>
+    </style>
+</resources>

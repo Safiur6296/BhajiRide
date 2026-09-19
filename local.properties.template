@@ -1,0 +1,4 @@
+# local.properties template
+# Copy this file or add the following line to local.properties in the project root:
+# MAPS_API_KEY=AIzaSy...your_actual_google_maps_api_key_here
+MAPS_API_KEY=YOUR_MAPS_API_KEY_HERE

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="firebase_database_url" translatable="false">https://ridesafe-a46dc-default-rtdb.firebaseio.com</string>
+    <string name="gcm_defaultSenderId" translatable="false">345773121112</string>
+    <string name="google_api_key" translatable="false">AIzaSyD00bmrop28lURGyA6QWNenxS9vpXUIVp0</string>
+    <string name="google_app_id" translatable="false">1:345773121112:android:c73030f59b40dc8306f42d</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyD00bmrop28lURGyA6QWNenxS9vpXUIVp0</string>
+    <string name="google_storage_bucket" translatable="false">ridesafe-a46dc.firebasestorage.app</string>
+    <string name="project_id" translatable="false">ridesafe-a46dc</string>
+</resources>

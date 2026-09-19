@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">BhaijiRide</string>
+    <string name="tracking_notification_channel_name">BhaijiRide Tracking</string>
+    <string name="tracking_notification_channel_desc">Active motorbike ride location tracking service</string>
+</resources>
