@@ -21,6 +21,8 @@ class RideSafeApp : Application() {
     companion object {
         // Notification channel ID for the foreground location tracking service
         const val LOCATION_CHANNEL_ID = "location_tracking_channel"
+        // Notification channel ID for critical emergency alerts
+        const val EMERGENCY_CHANNEL_ID = "emergency_alerts_channel"
     }
 
     override fun onCreate() {
@@ -43,29 +45,43 @@ class RideSafeApp : Application() {
             // Fallback for default instance
         }
 
-        // 2. Create Notification Channel for the Foreground Service
+        // 2. Create Notification Channels
         createNotificationChannel()
     }
 
     private fun createNotificationChannel() {
         // Notification channels are only required on Android 8.0 (API level 26) and higher
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelName = getString(R.string.tracking_notification_channel_name)
-            val channelDescription = getString(R.string.tracking_notification_channel_desc)
+            val notificationManager = getSystemService(NotificationManager::class.java) ?: return
 
-            // IMPORTANCE_LOW ensures the notification is shown persistently in the status bar
-            // without making an intrusive sound every time location updates.
-            val channel = NotificationChannel(
+            val trackingChannelName = getString(R.string.tracking_notification_channel_name)
+            val trackingChannelDesc = getString(R.string.tracking_notification_channel_desc)
+
+            // 1. Foreground tracking channel (low importance, no vibration/sound on every update)
+            val trackingChannel = NotificationChannel(
                 LOCATION_CHANNEL_ID,
-                channelName,
+                trackingChannelName,
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = channelDescription
+                description = trackingChannelDesc
                 setShowBadge(false)
             }
+            notificationManager.createNotificationChannel(trackingChannel)
 
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager?.createNotificationChannel(channel)
+            // 2. Critical Emergency Alert channel (high importance, heads-up display, vibration & sound)
+            val emergencyChannel = NotificationChannel(
+                EMERGENCY_CHANNEL_ID,
+                "BhaijiRide Emergency Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Critical alerts when a rider in your convoy triggers emergency status"
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 800)
+                enableLights(true)
+                lightColor = android.graphics.Color.RED
+                setShowBadge(true)
+            }
+            notificationManager.createNotificationChannel(emergencyChannel)
         }
     }
 }

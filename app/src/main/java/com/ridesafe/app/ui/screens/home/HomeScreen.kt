@@ -7,11 +7,13 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,13 +31,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.TwoWheeler
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -57,11 +61,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -75,8 +81,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ridesafe.app.R
 import com.ridesafe.app.data.model.LocalRideSession
 import com.ridesafe.app.data.model.LocalRideSessionUi
+import com.ridesafe.app.ui.theme.BikerAmber
 import com.ridesafe.app.ui.theme.BikerBorder
 import com.ridesafe.app.ui.theme.BikerCardBg
 import com.ridesafe.app.ui.theme.BikerDarkBg
@@ -209,43 +217,89 @@ fun HomeScreenContent(
             .fillMaxSize()
             .background(BikerDarkBg)
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(horizontal = 20.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        // App Header & Branding
+        // Hero Emblem & Cockpit Title
         Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape),
+            modifier = Modifier.size(136.dp),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.Shield,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(40.dp)
+            // Ambient neon crimson/amber halo backlight
+            Box(
+                modifier = Modifier
+                    .size(136.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                StatusRed.copy(alpha = 0.45f),
+                                BikerAmber.copy(alpha = 0.18f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
+            // Inner badge framing the motorcycle logo
+            Box(
+                modifier = Modifier
+                    .size(112.dp)
+                    .clip(CircleShape)
+                    .background(BikerCardBg)
+                    .border(2.5.dp, Brush.linearGradient(listOf(StatusRed, BikerAmber)), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.app_logo),
+                    contentDescription = "BhaijiRide App Logo",
+                    modifier = Modifier
+                        .size(96.dp)
+                        .clip(CircleShape)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "BHAIJI RIDE",
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 2.sp,
+            color = TextPrimary
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Subtitle badge pill
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(BikerSurfaceElevated)
+                .border(1.dp, BikerBorder, RoundedCornerShape(20.dp))
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(StatusGreen)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "GPS CONVOY & EMERGENCY SAFETY",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                color = TextSecondary
             )
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Text(
-            text = "BhaijiRide",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.ExtraBold,
-            color = TextPrimary
-        )
-        Text(
-            text = "Motorbike Group GPS & Status Tracking",
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary
-        )
-
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(26.dp))
 
         // Permission Banner: Disappears automatically when granted
         AnimatedVisibility(
@@ -257,19 +311,27 @@ fun HomeScreenContent(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(18.dp))
                         .background(StatusAmber.copy(alpha = 0.12f))
-                        .border(1.dp, StatusAmber.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                        .border(1.dp, StatusAmber.copy(alpha = 0.45f), RoundedCornerShape(18.dp))
                         .padding(16.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = StatusAmber,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(StatusAmber.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = StatusAmber,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Location Permission Needed",
@@ -278,18 +340,20 @@ fun HomeScreenContent(
                                 color = StatusAmber
                             )
                             Text(
-                                text = "BhaijiRide requires location to share your live GPS with other riders.",
+                                text = "BhaijiRide requires GPS to share live positions and emergency alerts.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = TextPrimary,
                                 fontSize = 12.sp
                             )
                         }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Button(
                             onClick = onRequestPermissions,
                             colors = ButtonDefaults.buttonColors(containerColor = StatusAmber),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                         ) {
-                            Text("Grant", color = BikerDarkBg, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text("Grant", color = BikerDarkBg, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                         }
                     }
                 }
@@ -297,102 +361,188 @@ fun HomeScreenContent(
             }
         }
 
-        // Rider Name Input Card
+        // -------------------------------------------------------------
+        // RIDER IDENTITY CARD
+        // -------------------------------------------------------------
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .background(BikerCardBg)
-                .border(1.dp, BikerBorder, RoundedCornerShape(20.dp))
+                .border(
+                    width = 1.dp,
+                    brush = Brush.horizontalGradient(
+                        listOf(BikerBorder, if (uiState.riderName.isNotBlank()) BikerAmber.copy(alpha = 0.5f) else BikerBorder)
+                    ),
+                    shape = RoundedCornerShape(22.dp)
+                )
                 .padding(20.dp)
         ) {
             Column {
-                Text(
-                    text = "RIDER IDENTITY",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextMuted,
-                    letterSpacing = 1.sp
-                )
-                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.TwoWheeler,
+                            contentDescription = null,
+                            tint = BikerAmber,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "RIDER CALLSIGN",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextMuted,
+                            letterSpacing = 1.2.sp
+                        )
+                    }
+                    if (uiState.riderName.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(StatusGreen.copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = StatusGreen,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "READY",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = StatusGreen
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 OutlinedTextField(
                     value = uiState.riderName,
                     onValueChange = onRiderNameChange,
                     label = { Text("Your Display Name (e.g. Alex)") },
                     placeholder = { Text("Enter your name") },
                     leadingIcon = {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = TextSecondary)
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = if (uiState.riderName.isNotBlank()) BikerAmber else TextSecondary
+                        )
                     },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedBorderColor = BikerAmber,
                         unfocusedBorderColor = BikerBorder,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = BikerAmber,
                         unfocusedLabelColor = TextSecondary,
                         focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
+                        unfocusedTextColor = TextPrimary,
+                        focusedContainerColor = BikerSurfaceElevated.copy(alpha = 0.5f),
+                        unfocusedContainerColor = BikerSurfaceElevated.copy(alpha = 0.3f)
                     ),
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(14.dp)
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Create Ride Card
+        // -------------------------------------------------------------
+        // START NEW CONVOY CARD
+        // -------------------------------------------------------------
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .background(BikerCardBg)
-                .border(1.dp, BikerBorder, RoundedCornerShape(20.dp))
+                .border(1.dp, BikerBorder, RoundedCornerShape(22.dp))
                 .padding(20.dp)
         ) {
             Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(BikerAmber.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = BikerAmber,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "START A NEW CONVOY",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextMuted,
+                            letterSpacing = 1.2.sp
+                        )
+                        Text(
+                            text = "Host a new group ride session",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Text(
-                    text = "START A NEW RIDE",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextMuted,
-                    letterSpacing = 1.sp
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Creates a new session and generates a 6-letter code to share with your group.",
+                    text = "Generates a unique 6-letter code to share with your pack for real-time GPS tracking and emergency safety.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
+                    color = TextSecondary,
+                    fontSize = 13.sp
                 )
+
                 Spacer(modifier = Modifier.height(16.dp))
+
                 Button(
                     onClick = {
-                        android.util.Log.d("RideSafeDebug", "[Permission] Create clicked: hasPermissions=$hasPermissions")
                         if (!hasPermissions) {
-                            android.util.Log.d("RideSafeDebug", "[Permission] Requesting permissions for Create Ride...")
                             onRequestPermissions()
                             return@Button
                         }
                         focusManager.clearFocus()
                         onCreateRide()
                     },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp),
                     shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    colors = ButtonDefaults.buttonColors(containerColor = BikerAmber),
                     enabled = !uiState.isCreatingRide && !uiState.isJoiningRide && uiState.rejoiningCode == null
                 ) {
                     if (uiState.isCreatingRide) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(22.dp),
                             color = BikerDarkBg,
-                            strokeWidth = 2.dp
+                            strokeWidth = 2.5.dp
                         )
                     } else {
                         Icon(Icons.Default.Add, contentDescription = null, tint = BikerDarkBg)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Create Ride Session",
+                            text = "Create Convoy Session",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Black,
                             color = BikerDarkBg
                         )
                     }
@@ -402,59 +552,122 @@ fun HomeScreenContent(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Join Ride Card
+        // -------------------------------------------------------------
+        // JOIN CONVOY CARD
+        // -------------------------------------------------------------
+        val clipboardManager = LocalClipboardManager.current
+        val context = LocalContext.current
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .background(BikerCardBg)
-                .border(1.dp, BikerBorder, RoundedCornerShape(20.dp))
+                .border(1.dp, BikerBorder, RoundedCornerShape(22.dp))
                 .padding(20.dp)
         ) {
             Column {
-                Text(
-                    text = "JOIN AN EXISTING RIDE",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextMuted,
-                    letterSpacing = 1.sp
-                )
-                Spacer(modifier = Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(BikerSurfaceElevated),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = TextPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "JOIN EXISTING CONVOY",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextMuted,
+                            letterSpacing = 1.2.sp
+                        )
+                        Text(
+                            text = "Connect with your pack",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
                 OutlinedTextField(
                     value = uiState.joinCode,
                     onValueChange = onJoinCodeChange,
-                    label = { Text("Ride Code (e.g. MOTO84)") },
+                    label = { Text("Convoy Code (e.g. MOTO84)") },
                     placeholder = { Text("ENTER CODE") },
                     singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 3.sp,
+                        fontSize = 18.sp
+                    ),
+                    trailingIcon = {
+                        // 1-Tap Paste Button from Clipboard
+                        IconButton(
+                            onClick = {
+                                val clip = clipboardManager.getText()?.text?.trim()?.uppercase()
+                                if (!clip.isNullOrEmpty()) {
+                                    onJoinCodeChange(clip)
+                                    Toast.makeText(context, "Pasted: $clip", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Clipboard empty", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentPaste,
+                                contentDescription = "Paste ride code",
+                                tint = BikerAmber,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    },
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Characters,
                         imeAction = ImeAction.Done
                     ),
                     keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedBorderColor = BikerAmber,
                         unfocusedBorderColor = BikerBorder,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = BikerAmber,
                         unfocusedLabelColor = TextSecondary,
                         focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
+                        unfocusedTextColor = TextPrimary,
+                        focusedContainerColor = BikerSurfaceElevated.copy(alpha = 0.5f),
+                        unfocusedContainerColor = BikerSurfaceElevated.copy(alpha = 0.3f)
                     ),
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(14.dp)
                 )
+
                 Spacer(modifier = Modifier.height(14.dp))
+
                 Button(
                     onClick = {
-                        android.util.Log.d("RideSafeDebug", "[Permission] Join clicked: hasPermissions=$hasPermissions, code='${uiState.joinCode}', name='${uiState.riderName}'")
                         if (!hasPermissions) {
-                            android.util.Log.d("RideSafeDebug", "[Permission] Requesting permissions for Join Ride...")
                             onRequestPermissions()
                             return@Button
                         }
                         focusManager.clearFocus()
                         onJoinRide()
                     },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BikerSurfaceElevated),
                     border = androidx.compose.foundation.BorderStroke(1.dp, BikerBorder),
@@ -462,15 +675,15 @@ fun HomeScreenContent(
                 ) {
                     if (uiState.isJoiningRide) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 2.dp
+                            modifier = Modifier.size(22.dp),
+                            color = BikerAmber,
+                            strokeWidth = 2.5.dp
                         )
                     } else {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = TextPrimary)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Join Ride",
+                            text = "Join Convoy",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
@@ -483,18 +696,27 @@ fun HomeScreenContent(
         // Error message presentation
         if (uiState.errorMessage != null) {
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = uiState.errorMessage ?: "",
-                color = StatusRed,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(StatusRed.copy(alpha = 0.15f))
+                    .border(1.dp, StatusRed.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = uiState.errorMessage ?: "",
+                    color = StatusRed,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
 
         // -------------------------------------------------------------
-        // YOUR RIDE SESSIONS SECTION
+        // CONVOY SESSIONS HISTORY SECTION
         // -------------------------------------------------------------
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -503,7 +725,7 @@ fun HomeScreenContent(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "YOUR RIDE SESSIONS",
+                    text = "RECENT CONVOYS",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextMuted,
@@ -547,18 +769,16 @@ fun HomeScreenContent(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(22.dp))
                     .background(BikerCardBg)
-                    .border(1.dp, BikerBorder, RoundedCornerShape(20.dp))
-                    .padding(28.dp),
+                    .border(1.dp, BikerBorder, RoundedCornerShape(22.dp))
+                    .padding(32.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(60.dp)
                             .clip(CircleShape)
                             .background(BikerSurfaceElevated),
                         contentAlignment = Alignment.Center
@@ -567,19 +787,19 @@ fun HomeScreenContent(
                             imageVector = Icons.Default.History,
                             contentDescription = null,
                             tint = TextMuted,
-                            modifier = Modifier.size(30.dp)
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "No Saved Ride Sessions",
+                        text = "No Saved Convoys",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Rides you create or join will appear here so you can quickly jump back in.",
+                        text = "Convoys you create or join will be saved here so you can quickly jump back into the action.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                         textAlign = TextAlign.Center
@@ -588,9 +808,7 @@ fun HomeScreenContent(
             }
         } else {
             // Session Cards List
-            Column(
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 uiState.sessions.forEach { sessionUi ->
                     SessionCard(
                         sessionUi = sessionUi,
@@ -631,12 +849,12 @@ private fun SessionCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(22.dp))
             .background(BikerCardBg)
             .border(
                 width = 1.dp,
-                color = if (sessionUi.isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else BikerBorder,
-                shape = RoundedCornerShape(20.dp)
+                color = if (sessionUi.isActive) StatusGreen.copy(alpha = 0.45f) else BikerBorder,
+                shape = RoundedCornerShape(22.dp)
             )
             .padding(18.dp)
     ) {
@@ -649,14 +867,14 @@ private fun SessionCard(
                 // Large readable Ride Code for bikers
                 Text(
                     text = sessionUi.rideCode,
-                    fontSize = 22.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.Monospace,
-                    letterSpacing = 2.sp,
+                    letterSpacing = 2.5.sp,
                     color = TextPrimary
                 )
 
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
                 // Tap-to-copy button
                 IconButton(
@@ -664,12 +882,12 @@ private fun SessionCard(
                         clipboardManager.setText(AnnotatedString(sessionUi.rideCode))
                         Toast.makeText(context, "Copied ${sessionUi.rideCode}", Toast.LENGTH_SHORT).show()
                     },
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(30.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
                         contentDescription = "Copy code",
-                        tint = TextSecondary,
+                        tint = BikerAmber,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -683,9 +901,7 @@ private fun SessionCard(
             Spacer(modifier = Modifier.height(6.dp))
 
             // Time description (e.g. "Created 2 hours ago" or "Joined yesterday")
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = formatSessionTime(sessionUi.timestamp, sessionUi.isHost),
                     style = MaterialTheme.typography.bodySmall,
@@ -713,10 +929,10 @@ private fun SessionCard(
                     onClick = onRejoin,
                     modifier = Modifier
                         .weight(1f)
-                        .height(46.dp),
+                        .height(48.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (sessionUi.isActive) MaterialTheme.colorScheme.primary else BikerSurfaceElevated
+                        containerColor = if (sessionUi.isActive) BikerAmber else BikerSurfaceElevated
                     ),
                     border = if (sessionUi.isActive) null else androidx.compose.foundation.BorderStroke(1.dp, BikerBorder),
                     enabled = !isRejoining
@@ -724,7 +940,7 @@ private fun SessionCard(
                     if (isRejoining) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
-                            color = if (sessionUi.isActive) BikerDarkBg else MaterialTheme.colorScheme.primary,
+                            color = if (sessionUi.isActive) BikerDarkBg else BikerAmber,
                             strokeWidth = 2.dp
                         )
                     } else {
@@ -736,7 +952,7 @@ private fun SessionCard(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (sessionUi.isActive) "Join" else "Rejoin",
+                            text = if (sessionUi.isActive) "Join Convoy" else "Rejoin",
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
                             color = if (sessionUi.isActive) BikerDarkBg else TextPrimary
@@ -748,7 +964,7 @@ private fun SessionCard(
                 IconButton(
                     onClick = onDelete,
                     modifier = Modifier
-                        .size(46.dp)
+                        .size(48.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(BikerSurfaceElevated)
                         .border(1.dp, BikerBorder, RoundedCornerShape(12.dp))
@@ -766,15 +982,15 @@ private fun SessionCard(
 }
 
 /**
- * Capsule status badge showing [ACTIVE] in green or [ENDED] in gray.
+ * Capsule status badge showing [LIVE NOW] in green or [ENDED] in gray.
  */
 @Composable
 private fun SessionStatusBadge(isActive: Boolean) {
-    val bgColor = if (isActive) StatusGreen.copy(alpha = 0.12f) else BikerSurfaceElevated
-    val borderColor = if (isActive) StatusGreen.copy(alpha = 0.45f) else BikerBorder
+    val bgColor = if (isActive) StatusGreen.copy(alpha = 0.14f) else BikerSurfaceElevated
+    val borderColor = if (isActive) StatusGreen.copy(alpha = 0.5f) else BikerBorder
     val dotColor = if (isActive) StatusGreen else TextMuted
     val textColor = if (isActive) StatusGreen else TextMuted
-    val label = if (isActive) "ACTIVE" else "ENDED"
+    val label = if (isActive) "LIVE NOW" else "ENDED"
 
     Box(
         modifier = Modifier
@@ -793,8 +1009,8 @@ private fun SessionStatusBadge(isActive: Boolean) {
             Spacer(modifier = Modifier.width(5.dp))
             Text(
                 text = label,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 0.5.sp,
                 color = textColor
             )

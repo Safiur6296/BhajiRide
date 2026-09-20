@@ -21,6 +21,9 @@
     <!-- Background location permission (Android 10+ / API 29) for tracking when app is minimized -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
+    <!-- Vibration permission for urgent emergency alert notifications -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <application
         android:name=".RideSafeApp"
         android:allowBackup="true"

@@ -29,12 +29,16 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -378,6 +382,25 @@ fun LiveMapScreen(
                 .padding(16.dp)
         )
 
+        // 2.5 Emergency Alert Banner: Displays when any other convoy rider sets status to EMERGENCY
+        val emergencyRiders = uiState.riders.filter { !it.isCurrentUser && it.rider.riderStatus == RiderStatus.EMERGENCY }
+        if (emergencyRiders.isNotEmpty()) {
+            EmergencyAlertBanner(
+                emergencyRiders = emergencyRiders,
+                onLocateRider = { emergencyRider ->
+                    val lat = emergencyRider.rider.lat
+                    val lng = emergencyRider.rider.lng
+                    if (lat != 0.0 && lng != 0.0) {
+                        mapView?.controller?.animateTo(GeoPoint(lat, lng), 17.0, 1000L)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 74.dp, start = 16.dp, end = 16.dp)
+            )
+        }
+
         // 3. Proximity Radar Box: Shows relative distance and ahead/behind status for all riders
         RiderProximityBox(
             riders = uiState.riders,
@@ -547,6 +570,78 @@ private fun TopRideBar(
                     contentDescription = "Leave Ride",
                     tint = StatusRed,
                     modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Emergency Alert Banner showing which rider needs immediate help and their distance,
+ * with a quick LOCATE button to animate the map camera directly to them.
+ */
+@Composable
+private fun EmergencyAlertBanner(
+    emergencyRiders: List<RiderWithDistance>,
+    onLocateRider: (RiderWithDistance) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val primaryEmergency = emergencyRiders.firstOrNull() ?: return
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(StatusRed.copy(alpha = 0.22f))
+            .border(2.dp, StatusRed, RoundedCornerShape(16.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(StatusRed.copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = "🚨", fontSize = 20.sp)
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "EMERGENCY: ${primaryEmergency.rider.name.ifEmpty { "Rider" }}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        color = StatusRed
+                    )
+                    Text(
+                        text = "Needs help! ${primaryEmergency.formattedDistance} away",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                }
+            }
+
+            Button(
+                onClick = { onLocateRider(primaryEmergency) },
+                colors = ButtonDefaults.buttonColors(containerColor = StatusRed),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = "LOCATE",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
                 )
             }
         }

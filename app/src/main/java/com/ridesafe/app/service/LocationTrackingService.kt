@@ -2,6 +2,7 @@ package com.ridesafe.app.service
 
 import android.annotation.SuppressLint
 import android.app.Notification
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -10,6 +11,9 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -20,22 +24,25 @@ import com.google.android.gms.location.Priority
 import com.ridesafe.app.MainActivity
 import com.ridesafe.app.R
 import com.ridesafe.app.RideSafeApp
+import com.ridesafe.app.data.model.Rider
 import com.ridesafe.app.data.model.RiderStatus
 import com.ridesafe.app.data.repository.RideRepository
+import com.ridesafe.app.util.LocationUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 /**
  * LocationTrackingService is a Foreground Service that continuously tracks GPS location
  * and syncs it to Firebase Realtime Database.
  *
- * Why a Foreground Service?
- * Standard Android location listeners stop receiving updates when the user locks their phone
- * or switches to Google Maps / music app. A Foreground Service with an ongoing notification
- * keeps the tracking alive continuously throughout the motorbike ride.
+ * It also actively observes the convoy's riders: when another rider sets status to EMERGENCY,
+ * it immediately triggers a high-priority heads-up notification with their name and calculated
+ * distance, and vibrates the receiver's phone.
  */
 class LocationTrackingService : Service() {
 
@@ -50,8 +57,15 @@ class LocationTrackingService : Service() {
     private var currentRiderName: String = ""
     private var currentStatus: RiderStatus = RiderStatus.RIDING
 
+    // Emergency tracking
+    private var emergencyObservationJob: Job? = null
+    private val activeEmergencyRiders = mutableMapOf<String, Rider>()
+    private var lastKnownLat: Double = 0.0
+    private var lastKnownLng: Double = 0.0
+
     companion object {
         const val NOTIFICATION_ID = 1001
+        const val EMERGENCY_NOTIFICATION_BASE_ID = 2000
 
         const val ACTION_START = "ACTION_START_TRACKING"
         const val ACTION_STOP = "ACTION_STOP_TRACKING"
@@ -122,6 +136,7 @@ class LocationTrackingService : Service() {
                 android.util.Log.d("RideSafeDebug", "[Service] onStartCommand ACTION_START: rideCode='$currentRideCode', riderId='$currentRiderId', name='$currentRiderName'")
                 startInForeground()
                 startLocationUpdates()
+                startObservingEmergencyAlerts()
             }
             ACTION_UPDATE_STATUS -> {
                 val statusName = intent.getStringExtra(EXTRA_STATUS)
@@ -133,11 +148,12 @@ class LocationTrackingService : Service() {
                 }
                 // Update notification text to reflect new status
                 val notification = buildNotification()
-                val notificationManager = getSystemService(android.app.NotificationManager::class.java)
+                val notificationManager = getSystemService(NotificationManager::class.java)
                 notificationManager?.notify(NOTIFICATION_ID, notification)
             }
             ACTION_STOP -> {
                 stopLocationUpdates()
+                clearEmergencyAlerts()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -200,21 +216,172 @@ class LocationTrackingService : Service() {
             .build()
     }
 
+    // -------------------------------------------------------------
+    // EMERGENCY NOTIFICATION & VIBRATION DISPATCHER
+    // -------------------------------------------------------------
+
+    private fun startObservingEmergencyAlerts() {
+        emergencyObservationJob?.cancel()
+        if (currentRideCode.isEmpty()) return
+
+        emergencyObservationJob = serviceScope.launch {
+            repository.observeRiders(currentRideCode)
+                .catch { e ->
+                    android.util.Log.e("RideSafeDebug", "[Service] Error observing emergencies: ${e.message}", e)
+                }
+                .collect { riders ->
+                    handleRidersEmergencyStatus(riders)
+                }
+        }
+    }
+
+    private fun handleRidersEmergencyStatus(riders: List<Rider>) {
+        val notificationManager = getSystemService(NotificationManager::class.java) ?: return
+
+        // Filter other riders currently in EMERGENCY state
+        val currentEmergencies = riders.filter {
+            it.id != currentRiderId && it.riderStatus == RiderStatus.EMERGENCY
+        }
+        val currentEmergencyIds = currentEmergencies.map { it.id }.toSet()
+
+        // 1. Cancel notifications for riders who resolved their emergency or left
+        val resolvedRiderIds = activeEmergencyRiders.keys - currentEmergencyIds
+        for (resolvedId in resolvedRiderIds) {
+            val notifId = EMERGENCY_NOTIFICATION_BASE_ID + ((resolvedId.hashCode() and 0x7FFFFFFF) % 10000)
+            notificationManager.cancel(notifId)
+            activeEmergencyRiders.remove(resolvedId)
+        }
+
+        // 2. Post / update notification and vibrate for active emergencies
+        for (rider in currentEmergencies) {
+            val isNewEmergency = !activeEmergencyRiders.containsKey(rider.id)
+            activeEmergencyRiders[rider.id] = rider
+
+            val distanceStr = calculateDistanceString(rider.lat, rider.lng)
+            val notifId = EMERGENCY_NOTIFICATION_BASE_ID + ((rider.id.hashCode() and 0x7FFFFFFF) % 10000)
+            val notification = buildEmergencyNotification(rider, distanceStr)
+
+            notificationManager.notify(notifId, notification)
+
+            // Vibrate receiver device immediately when a new emergency is declared!
+            if (isNewEmergency) {
+                triggerEmergencyVibration()
+            }
+        }
+    }
+
+    private fun calculateDistanceString(riderLat: Double, riderLng: Double): String {
+        return if (lastKnownLat != 0.0 && lastKnownLng != 0.0 && riderLat != 0.0 && riderLng != 0.0) {
+            val distMeters = LocationUtils.calculateDistanceMeters(lastKnownLat, lastKnownLng, riderLat, riderLng)
+            "${LocationUtils.formatDistance(distMeters)} away"
+        } else {
+            "Locating GPS..."
+        }
+    }
+
+    private fun buildEmergencyNotification(rider: Rider, distanceStr: String): Notification {
+        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        val pendingOpenApp = PendingIntent.getActivity(
+            this,
+            rider.id.hashCode(),
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val riderName = rider.name.ifEmpty { "Rider" }
+        val title = "🚨 EMERGENCY ALERT: $riderName"
+        val body = "$riderName needs urgent assistance! Distance: $distanceStr"
+
+        val vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 800)
+
+        return NotificationCompat.Builder(this, RideSafeApp.EMERGENCY_CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("$body\nTap immediately to view their location on the convoy map.")
+            )
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentIntent(pendingOpenApp)
+            .setAutoCancel(false)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVibrate(vibrationPattern)
+            .setLights(android.graphics.Color.RED, 500, 500)
+            .build()
+    }
+
+    private fun triggerEmergencyVibration() {
+        try {
+            android.util.Log.d("RideSafeDebug", "[Service] Triggering emergency vibration on receiver phone!")
+            val pattern = longArrayOf(0, 500, 200, 500, 200, 800)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                val vibrator = vibratorManager?.defaultVibrator
+                vibrator?.vibrate(VibrationEffect.createWaveform(pattern, -1))
+            } else {
+                @Suppress("DEPRECATION")
+                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator?.vibrate(VibrationEffect.createWaveform(pattern, -1))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator?.vibrate(pattern, -1)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("RideSafeDebug", "[Service] Error triggering emergency vibration: ${e.message}", e)
+        }
+    }
+
+    private fun refreshEmergencyDistances() {
+        if (activeEmergencyRiders.isEmpty()) return
+        val notificationManager = getSystemService(NotificationManager::class.java) ?: return
+
+        for ((id, rider) in activeEmergencyRiders) {
+            val distanceStr = calculateDistanceString(rider.lat, rider.lng)
+            val notifId = EMERGENCY_NOTIFICATION_BASE_ID + ((id.hashCode() and 0x7FFFFFFF) % 10000)
+            val notification = buildEmergencyNotification(rider, distanceStr)
+            notificationManager.notify(notifId, notification)
+        }
+    }
+
+    private fun clearEmergencyAlerts() {
+        emergencyObservationJob?.cancel()
+        emergencyObservationJob = null
+
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        for (id in activeEmergencyRiders.keys) {
+            val notifId = EMERGENCY_NOTIFICATION_BASE_ID + ((id.hashCode() and 0x7FFFFFFF) % 10000)
+            notificationManager?.cancel(notifId)
+        }
+        activeEmergencyRiders.clear()
+    }
+
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
         // 1. Immediately push last known location if available
         try {
             fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                 android.util.Log.d("RideSafeDebug", "[Location] Service lastLocation callback: location=$location")
-                if (location != null && currentRideCode.isNotEmpty() && currentRiderId.isNotEmpty()) {
-                    android.util.Log.d("RideSafeDebug", "[Location] Service pushing initial lastLocation: lat=${location.latitude}, lng=${location.longitude}")
-                    repository.updateLocation(
-                        rideCode = currentRideCode,
-                        riderId = currentRiderId,
-                        lat = location.latitude,
-                        lng = location.longitude,
-                        speed = location.speed
-                    )
+                if (location != null) {
+                    lastKnownLat = location.latitude
+                    lastKnownLng = location.longitude
+                    refreshEmergencyDistances()
+
+                    if (currentRideCode.isNotEmpty() && currentRiderId.isNotEmpty()) {
+                        android.util.Log.d("RideSafeDebug", "[Location] Service pushing initial lastLocation: lat=${location.latitude}, lng=${location.longitude}")
+                        repository.updateLocation(
+                            rideCode = currentRideCode,
+                            riderId = currentRiderId,
+                            lat = location.latitude,
+                            lng = location.longitude,
+                            speed = location.speed
+                        )
+                    }
                 }
             }
         } catch (e: SecurityException) {
@@ -249,6 +416,10 @@ class LocationTrackingService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val location = result.lastLocation ?: return
+                lastKnownLat = location.latitude
+                lastKnownLng = location.longitude
+                refreshEmergencyDistances()
+
                 android.util.Log.d(
                     "RideSafeDebug",
                     "[Location] Service onLocationResult: lat=${location.latitude}, lng=${location.longitude}, speed=${location.speed}, accuracy=${location.accuracy}"
@@ -281,6 +452,7 @@ class LocationTrackingService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopLocationUpdates()
+        clearEmergencyAlerts()
         serviceScope.cancel()
     }
 
