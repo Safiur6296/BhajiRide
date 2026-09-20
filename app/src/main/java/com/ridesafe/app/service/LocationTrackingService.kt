@@ -119,6 +119,7 @@ class LocationTrackingService : Service() {
                 currentRiderId = intent.getStringExtra(EXTRA_RIDER_ID) ?: ""
                 currentRiderName = intent.getStringExtra(EXTRA_RIDER_NAME) ?: "Rider"
 
+                android.util.Log.d("RideSafeDebug", "[Service] onStartCommand ACTION_START: rideCode='$currentRideCode', riderId='$currentRiderId', name='$currentRiderName'")
                 startInForeground()
                 startLocationUpdates()
             }
@@ -204,7 +205,9 @@ class LocationTrackingService : Service() {
         // 1. Immediately push last known location if available
         try {
             fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                android.util.Log.d("RideSafeDebug", "[Location] Service lastLocation callback: location=$location")
                 if (location != null && currentRideCode.isNotEmpty() && currentRiderId.isNotEmpty()) {
+                    android.util.Log.d("RideSafeDebug", "[Location] Service pushing initial lastLocation: lat=${location.latitude}, lng=${location.longitude}")
                     repository.updateLocation(
                         rideCode = currentRideCode,
                         riderId = currentRiderId,
@@ -215,12 +218,10 @@ class LocationTrackingService : Service() {
                 }
             }
         } catch (e: SecurityException) {
-            // Permission was revoked
+            android.util.Log.e("RideSafeDebug", "[Location] Service SecurityException on lastLocation: ${e.message}", e)
         }
 
         // 2. Continuous location requests:
-        // - intervalMillis = 5000: requests location every 5 seconds.
-        // - minUpdateDistanceMeters = 0m: ensures updates are sent even when stopped at a signal or refueling.
         val locationRequest = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY,
             5000L
@@ -231,12 +232,15 @@ class LocationTrackingService : Service() {
         }.build()
 
         try {
+            android.util.Log.d("RideSafeDebug", "[Location] Service requesting continuous location updates...")
             fusedLocationClient.requestLocationUpdates(
                 locationRequest,
                 locationCallback,
                 Looper.getMainLooper()
             )
+            android.util.Log.d("RideSafeDebug", "[Location] Service requestLocationUpdates registered successfully.")
         } catch (e: SecurityException) {
+            android.util.Log.e("RideSafeDebug", "[Location] Service SecurityException on requestLocationUpdates: ${e.message}. Calling stopSelf()!", e)
             stopSelf()
         }
     }
@@ -245,6 +249,10 @@ class LocationTrackingService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val location = result.lastLocation ?: return
+                android.util.Log.d(
+                    "RideSafeDebug",
+                    "[Location] Service onLocationResult: lat=${location.latitude}, lng=${location.longitude}, speed=${location.speed}, accuracy=${location.accuracy}"
+                )
 
                 if (currentRideCode.isNotEmpty() && currentRiderId.isNotEmpty()) {
                     // Update Firebase with fresh coordinates, speed, and timestamp

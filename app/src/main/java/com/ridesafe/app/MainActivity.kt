@@ -30,6 +30,12 @@ class MainActivity : ComponentActivity() {
                 contract = ActivityResultContracts.RequestMultiplePermissions()
             ) { permissionsMap ->
                 val fineGranted = permissionsMap[android.Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+                val coarseGranted = permissionsMap[android.Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+                val notifGranted = permissionsMap[android.Manifest.permission.POST_NOTIFICATIONS] ?: true
+                android.util.Log.d(
+                    "RideSafeDebug",
+                    "[Permission] Permission result: fine=$fineGranted, coarse=$coarseGranted, notification=$notifGranted"
+                )
                 if (fineGranted) {
                     Toast.makeText(this, "GPS Location granted!", Toast.LENGTH_SHORT).show()
                 } else {

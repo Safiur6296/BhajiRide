@@ -102,7 +102,11 @@ class RideRepository {
             val sessionRef = ridesRef.child(rideCode)
             sessionRef.keepSynced(true)
             sessionRef.child("session").setValue(session)
+                .addOnSuccessListener { Log.d("RideSafeDebug", "[FirebaseWrite] createRide session write SUCCESS: code=$rideCode") }
+                .addOnFailureListener { e -> Log.e("RideSafeDebug", "[FirebaseWrite] createRide session write FAILED: ${e.message}", e) }
             sessionRef.child("riders").child(riderId).setValue(initialRider)
+                .addOnSuccessListener { Log.d("RideSafeDebug", "[FirebaseWrite] createRide initialRider write SUCCESS: code=$rideCode, riderId=$riderId") }
+                .addOnFailureListener { e -> Log.e("RideSafeDebug", "[FirebaseWrite] createRide initialRider write FAILED: ${e.message}", e) }
 
             Result.success(Pair(rideCode, riderId))
         } catch (e: Exception) {
@@ -173,6 +177,12 @@ class RideRepository {
             // Add this rider to the ride's riders node.
             // setValue writes to local cache and synchronizes to Firebase Realtime Database
             ridesRef.child(cleanCode).child("riders").child(riderId).setValue(rider)
+                .addOnSuccessListener {
+                    Log.d("RideSafeDebug", "[FirebaseWrite] joinRide rider write SUCCESS: code=$cleanCode, riderId=$riderId, name=${rider.name}")
+                }
+                .addOnFailureListener { e ->
+                    Log.e("RideSafeDebug", "[FirebaseWrite] joinRide rider write FAILED: ${e.message}", e)
+                }
 
             Result.success(riderId)
         } catch (e: Exception) {
@@ -198,7 +208,13 @@ class RideRepository {
             "speed" to speed,
             "lastUpdated" to System.currentTimeMillis()
         )
-        ridesRef.child(cleanCode).child("riders").child(riderId).updateChildren(updates)
+        ridesRef.child(cleanCode).child("riders").child(riderId).updateChildren(updates) { error, _ ->
+            if (error != null) {
+                Log.e("RideSafeDebug", "[FirebaseWrite] updateLocation FAILED: ${error.message} (code: ${error.code}) for riderId=$riderId, ride=$cleanCode")
+            } else {
+                Log.d("RideSafeDebug", "[FirebaseWrite] updateLocation SUCCESS: riderId=$riderId, lat=$lat, lng=$lng, speed=$speed")
+            }
+        }
     }
 
     /**
@@ -230,6 +246,10 @@ class RideRepository {
                         ridersList.add(rider.copy(id = child.key ?: rider.id))
                     }
                 }
+                Log.d(
+                    "RideSafeDebug",
+                    "[FirebaseObserve] onDataChange: ${ridersList.size} riders received for $cleanCode -> ${ridersList.map { "${it.name}(id=${it.id}, lat=${it.lat}, lng=${it.lng})" }}"
+                )
                 // Emit the new list to the Flow collector (ViewModel)
                 trySend(ridersList)
             }

@@ -215,16 +215,18 @@ fun LiveMapScreen(
     LaunchedEffect(Unit) {
         try {
             fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                android.util.Log.d("RideSafeDebug", "[MapRender] LiveMapScreen lastLocation: loc=$loc, hasCentered=$hasCenteredInitialLocation")
                 if (loc != null && !hasCenteredInitialLocation) {
                     mapView?.controller?.let { controller ->
                         controller.setZoom(15.5)
                         controller.setCenter(GeoPoint(loc.latitude, loc.longitude))
                     }
                     hasCenteredInitialLocation = true
+                    android.util.Log.d("RideSafeDebug", "[MapRender] Camera centered on real GPS position: ${loc.latitude}, ${loc.longitude}")
                 }
             }
         } catch (e: SecurityException) {
-            // Location permission not yet granted — camera will center when Firebase data arrives
+            android.util.Log.e("RideSafeDebug", "[MapRender] SecurityException on lastLocation: ${e.message}", e)
         }
     }
 
@@ -233,12 +235,14 @@ fun LiveMapScreen(
     LaunchedEffect(currentRider?.rider?.lat, currentRider?.rider?.lng) {
         val lat = currentRider?.rider?.lat ?: 0.0
         val lng = currentRider?.rider?.lng ?: 0.0
+        android.util.Log.d("RideSafeDebug", "[MapRender] LaunchedEffect currentRider coords: lat=$lat, lng=$lng, hasCentered=$hasCenteredInitialLocation")
         if (!hasCenteredInitialLocation && lat != 0.0 && lng != 0.0) {
             mapView?.controller?.let { controller ->
                 controller.setZoom(16.0)
                 controller.animateTo(GeoPoint(lat, lng), 16.0, 800L)
             }
             hasCenteredInitialLocation = true
+            android.util.Log.d("RideSafeDebug", "[MapRender] Camera animated to current rider position: ($lat, $lng)")
         }
     }
 
@@ -293,13 +297,16 @@ fun LiveMapScreen(
             },
             update = { mv ->
                 // Clear all existing marker overlays and re-add from current state.
-                // This runs on every recomposition when riders list changes,
-                // keeping markers perfectly in sync with Firebase data.
                 mv.overlays.clear()
+                android.util.Log.d("RideSafeDebug", "[MapRender] Updating map overlays for ${riders.size} riders in UI state:")
 
                 riders.forEach { riderItem ->
                     val rider = riderItem.rider
                     if (rider.lat != 0.0 && rider.lng != 0.0) {
+                        android.util.Log.d(
+                            "RideSafeDebug",
+                            "[MapRender] -> ADDING MARKER for '${rider.name}' (isCurrentUser=${riderItem.isCurrentUser}, id=${rider.id}) at (${rider.lat}, ${rider.lng})"
+                        )
                         val position = GeoPoint(rider.lat, rider.lng)
                         val status = rider.riderStatus
 
@@ -339,6 +346,11 @@ fun LiveMapScreen(
                             }
                         }
                         mv.overlays.add(marker)
+                    } else {
+                        android.util.Log.w(
+                            "RideSafeDebug",
+                            "[MapRender] -> SKIPPING MARKER for '${rider.name}' (isCurrentUser=${riderItem.isCurrentUser}, id=${rider.id}) because lat=${rider.lat}, lng=${rider.lng}"
+                        )
                     }
                 }
 

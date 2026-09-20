@@ -75,9 +75,11 @@ class MapViewModel(
      */
     fun initSession(rideCode: String, riderId: String, riderName: String) {
         val cleanCode = rideCode.trim().uppercase()
+        Log.d("RideSafeDebug", "[MapViewModel] initSession called: cleanCode='$cleanCode', riderId='$riderId', riderName='$riderName'")
 
         // Guard against duplicate initialization resetting state on recomposition
         if (_uiState.value.rideCode == cleanCode && _uiState.value.currentRiderId == riderId && _uiState.value.riders.isNotEmpty()) {
+            Log.d("RideSafeDebug", "[MapViewModel] initSession guard skipped duplicate init")
             return
         }
 
@@ -124,6 +126,7 @@ class MapViewModel(
         try {
             // 1. Check lastLocation immediately for instant rendering if available
             client.lastLocation.addOnSuccessListener { loc ->
+                Log.d("RideSafeDebug", "[Location] MapViewModel lastLocation callback: loc=$loc")
                 if (loc != null) {
                     onLocalLocationReceived(
                         loc.latitude,
@@ -136,6 +139,7 @@ class MapViewModel(
 
             // 2. Actively request current fresh location fix from hardware
             client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).addOnSuccessListener { loc ->
+                Log.d("RideSafeDebug", "[Location] MapViewModel getCurrentLocation callback: loc=$loc")
                 if (loc != null) {
                     onLocalLocationReceived(
                         loc.latitude,
@@ -162,6 +166,7 @@ class MapViewModel(
             val callback = object : LocationCallback() {
                 override fun onLocationResult(result: LocationResult) {
                     val loc = result.lastLocation ?: return
+                    Log.d("RideSafeDebug", "[Location] MapViewModel onLocationResult: lat=${loc.latitude}, lng=${loc.longitude}, speed=${loc.speed}")
                     onLocalLocationReceived(
                         loc.latitude,
                         loc.longitude,
@@ -171,13 +176,15 @@ class MapViewModel(
                 }
             }
             locationCallback = callback
+            Log.d("RideSafeDebug", "[Location] MapViewModel requesting continuous location updates...")
             client.requestLocationUpdates(locationRequest, callback, Looper.getMainLooper())
         } catch (e: SecurityException) {
-            Log.e("MapViewModel", "Location permission missing", e)
+            Log.e("RideSafeDebug", "[Location] MapViewModel SecurityException on location tracking: ${e.message}", e)
         }
     }
 
     private fun onLocalLocationReceived(lat: Double, lng: Double, speed: Float, heading: Float?) {
+        Log.d("RideSafeDebug", "[Location] MapViewModel onLocalLocationReceived: lat=$lat, lng=$lng, speed=$speed, heading=$heading")
         if (heading != null && heading >= 0f) {
             lastKnownHeading = heading
         }
@@ -199,6 +206,7 @@ class MapViewModel(
 
         // Push to Firebase so all other group members see our updated coordinates
         if (cleanCode.isNotEmpty() && myId.isNotEmpty()) {
+            Log.d("RideSafeDebug", "[Location] Pushing location to Firebase from MapViewModel for $myId...")
             repository.updateLocation(cleanCode, myId, lat, lng, speed)
         }
 
@@ -248,6 +256,11 @@ class MapViewModel(
         // Merge riders: current user first, then all other riders from Firebase
         val otherRiders = latestFirebaseRiders.filter { it.id != myId }
         val allRiders = listOf(effectiveMe) + otherRiders
+
+        Log.d(
+            "RideSafeDebug",
+            "[MapViewModel] updateRidersWithLocalLocation: effectiveMe='${effectiveMe.name}'(id=${effectiveMe.id}, lat=${effectiveMe.lat}, lng=${effectiveMe.lng}), otherRidersCount=${otherRiders.size}"
+        )
 
         val ridersWithDistance = allRiders.map { rider ->
             val isMe = rider.id == myId

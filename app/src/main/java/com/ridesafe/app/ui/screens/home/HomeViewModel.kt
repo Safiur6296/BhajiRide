@@ -138,6 +138,7 @@ class HomeViewModel(
             try {
                 val result = rideRepository.createRide(name)
                 result.onSuccess { (rideCode, riderId) ->
+                    android.util.Log.d("RideSafeDebug", "[Service] createRide success: rideCode=$rideCode, riderId=$riderId. Starting LocationTrackingService...")
                     // Save to local DataStore
                     sessionPrefs.saveSession(
                         LocalRideSession(
@@ -156,9 +157,11 @@ class HomeViewModel(
                         riderId = riderId,
                         riderName = name
                     )
+                    android.util.Log.d("RideSafeDebug", "[Service] LocationTrackingService.startTracking called for creator. Navigating to map...")
 
                     onRideJoined(rideCode, riderId, name)
                 }.onFailure { error ->
+                    android.util.Log.e("RideSafeDebug", "[Service] createRide repository call failed: ${error.message}", error)
                     _uiState.update { it.copy(errorMessage = error.localizedMessage ?: "Failed to create ride.") }
                 }
             } catch (e: Exception) {
@@ -191,6 +194,7 @@ class HomeViewModel(
             try {
                 val result = rideRepository.joinRide(code, name)
                 result.onSuccess { riderId ->
+                    android.util.Log.d("RideSafeDebug", "[Service] joinRide success: code=$code, riderId=$riderId. Starting LocationTrackingService...")
                     // Save to local DataStore
                     sessionPrefs.saveSession(
                         LocalRideSession(
@@ -209,9 +213,11 @@ class HomeViewModel(
                         riderId = riderId,
                         riderName = name
                     )
+                    android.util.Log.d("RideSafeDebug", "[Service] LocationTrackingService.startTracking called for joiner. Navigating to map...")
 
                     onRideJoined(code, riderId, name)
                 }.onFailure { error ->
+                    android.util.Log.e("RideSafeDebug", "[Service] joinRide repository call failed: ${error.message}", error)
                     _uiState.update { it.copy(errorMessage = error.localizedMessage ?: "Failed to join ride.") }
                 }
             } catch (e: Exception) {

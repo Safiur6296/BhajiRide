@@ -366,7 +366,9 @@ fun HomeScreenContent(
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = {
+                        android.util.Log.d("RideSafeDebug", "[Permission] Create clicked: hasPermissions=$hasPermissions")
                         if (!hasPermissions) {
+                            android.util.Log.d("RideSafeDebug", "[Permission] Requesting permissions for Create Ride...")
                             onRequestPermissions()
                             return@Button
                         }
@@ -443,7 +445,9 @@ fun HomeScreenContent(
                 Spacer(modifier = Modifier.height(14.dp))
                 Button(
                     onClick = {
+                        android.util.Log.d("RideSafeDebug", "[Permission] Join clicked: hasPermissions=$hasPermissions, code='${uiState.joinCode}', name='${uiState.riderName}'")
                         if (!hasPermissions) {
+                            android.util.Log.d("RideSafeDebug", "[Permission] Requesting permissions for Join Ride...")
                             onRequestPermissions()
                             return@Button
                         }
