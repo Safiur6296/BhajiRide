@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,25 +53,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.drawable.BitmapDrawable
 import androidx.compose.ui.graphics.toArgb
 import com.google.android.gms.location.LocationServices
-import com.google.android.gms.maps.model.BitmapDescriptor
 import com.ridesafe.app.ui.theme.RideSafeTheme
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.model.BitmapDescriptorFactory
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.MapProperties
-import com.google.maps.android.compose.MapUiSettings
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
-import com.google.maps.android.compose.rememberCameraPositionState
-import com.google.maps.android.compose.rememberMarkerState
 import com.ridesafe.app.data.model.RiderStatus
 import com.ridesafe.app.ui.theme.BikerBorder
 import com.ridesafe.app.ui.theme.BikerCardBg
@@ -81,11 +72,17 @@ import com.ridesafe.app.ui.theme.TextMuted
 import com.ridesafe.app.ui.theme.TextPrimary
 import com.ridesafe.app.ui.theme.TextSecondary
 import com.ridesafe.app.util.LocationUtils
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker as OsmMarker
 
 /**
- * Creates a custom map pin with the rider's status color and status emoji.
+ * Creates a custom map pin bitmap with the rider's status color and status emoji.
+ * Returns a raw Bitmap (wrapped in BitmapDrawable at the usage site for osmdroid).
  */
-private fun createStatusMarkerBitmap(status: RiderStatus): BitmapDescriptor {
+private fun createStatusMarkerBitmap(status: RiderStatus): Bitmap {
     val width = 120
     val height = 145
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -117,13 +114,16 @@ private fun createStatusMarkerBitmap(status: RiderStatus): BitmapDescriptor {
     paint.color = status.color.toArgb()
     canvas.drawPath(path, paint)
 
-    return BitmapDescriptorFactory.fromBitmap(bitmap)
+    return bitmap
 }
 
 /**
  * LiveMapScreen is the main in-ride dashboard.
- * Shows all riders on the Google Map in real time, current stop statuses,
+ * Shows all riders on an OpenStreetMap (osmdroid) map in real time, current stop statuses,
  * and quick-access controls for group communication.
+ *
+ * The map uses osmdroid's MapView wrapped in Compose's AndroidView interop.
+ * osmdroid loads free OpenStreetMap tiles — no API key or billing account needed.
  */
 @Composable
 fun LiveMapScreen(
@@ -134,28 +134,41 @@ fun LiveMapScreen(
     val coroutineScope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
 
-    val markerIconCache = remember { mutableMapOf<RiderStatus, BitmapDescriptor>() }
+    // Cache marker bitmaps by status so we don't recreate them every recomposition
+    val markerBitmapCache = remember { mutableMapOf<RiderStatus, Bitmap>() }
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
-    val defaultPosition = LatLng(37.7749, -122.4194) // Default fallback
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(defaultPosition, 14f)
-    }
-
+    // Hold a reference to the osmdroid MapView so we can control it from Compose callbacks
+    var mapView by remember { mutableStateOf<MapView?>(null) }
     var hasCenteredInitialLocation by remember { mutableStateOf(false) }
+
+    // Configure osmdroid ONCE before the MapView is created.
+    // This sets the User-Agent (required by OpenStreetMap tile servers) and
+    // tile cache paths (using app-internal storage to avoid needing WRITE_EXTERNAL_STORAGE).
+    LaunchedEffect(Unit) {
+        Configuration.getInstance().apply {
+            userAgentValue = context.packageName
+            // Store tiles in app-private directories — works on all Android versions
+            // without needing WRITE_EXTERNAL_STORAGE permission
+            osmdroidBasePath = context.getDir("osmdroid", Context.MODE_PRIVATE)
+            osmdroidTileCache = context.getDir("osmdroid_tiles", Context.MODE_PRIVATE)
+        }
+    }
 
     // Center camera immediately on the device's real GPS position
     LaunchedEffect(Unit) {
         try {
             fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
                 if (loc != null && !hasCenteredInitialLocation) {
-                    cameraPositionState.move(
-                        CameraUpdateFactory.newLatLngZoom(LatLng(loc.latitude, loc.longitude), 15.5f)
-                    )
+                    mapView?.controller?.let { controller ->
+                        controller.setZoom(15.5)
+                        controller.setCenter(GeoPoint(loc.latitude, loc.longitude))
+                    }
                     hasCenteredInitialLocation = true
                 }
             }
         } catch (e: SecurityException) {
+            // Location permission not yet granted — camera will center when Firebase data arrives
         }
     }
 
@@ -165,71 +178,104 @@ fun LiveMapScreen(
         val lat = currentRider?.rider?.lat ?: 0.0
         val lng = currentRider?.rider?.lng ?: 0.0
         if (!hasCenteredInitialLocation && lat != 0.0 && lng != 0.0) {
-            cameraPositionState.animate(
-                CameraUpdateFactory.newLatLngZoom(LatLng(lat, lng), 15.5f)
-            )
+            mapView?.controller?.let { controller ->
+                controller.animateTo(GeoPoint(lat, lng), 15.5, 1000L)
+            }
             hasCenteredInitialLocation = true
         }
     }
 
-    val mapProperties = remember {
-        MapProperties(isMyLocationEnabled = true)
-    }
-    val mapUiSettings = remember {
-        MapUiSettings(
-            zoomControlsEnabled = false,
-            compassEnabled = true,
-            myLocationButtonEnabled = false
-        )
+    // Clean up osmdroid MapView lifecycle when this composable leaves the composition
+    DisposableEffect(Unit) {
+        onDispose {
+            mapView?.onPause()
+            mapView?.onDetach()
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(BikerDarkBg)) {
-        // 1. Interactive Google Map with live markers
-        GoogleMap(
+        // 1. Interactive OpenStreetMap with live rider markers
+        //    AndroidView bridges the imperative osmdroid MapView into declarative Compose.
+        //    - factory: creates the MapView once
+        //    - update: called on every recomposition to sync markers with uiState
+        AndroidView(
             modifier = Modifier.fillMaxSize(),
-            cameraPositionState = cameraPositionState,
-            properties = mapProperties,
-            uiSettings = mapUiSettings
-        ) {
-            // Render a custom status pin for every rider in the group
-            uiState.riders.forEach { riderItem ->
-                val rider = riderItem.rider
-                if (rider.lat != 0.0 && rider.lng != 0.0) {
-                    val position = LatLng(rider.lat, rider.lng)
-                    val status = rider.riderStatus
-
-                    val titleText = if (riderItem.isCurrentUser) {
-                        "${rider.name} (You) ${status.emoji}"
-                    } else {
-                        "${rider.name} ${status.emoji}"
-                    }
-
-                    val snippetText = if (riderItem.isCurrentUser) {
-                        "Status: ${status.displayName}"
-                    } else {
-                        "Status: ${status.displayName} • ${riderItem.formattedDistance} • ${LocationUtils.formatTimeAgo(rider.lastUpdated)}"
-                    }
-
-                    val markerIcon = markerIconCache.getOrPut(status) {
-                        createStatusMarkerBitmap(status)
-                    }
-
-                    val markerState = rememberMarkerState(key = rider.id, position = position)
-                    markerState.position = position
-
-                    Marker(
-                        state = markerState,
-                        title = titleText,
-                        snippet = snippetText,
-                        icon = markerIcon,
-                        onClick = {
-                            viewModel.selectRider(riderItem)
-                            false // Returns false to show default info window
-                        }
+            factory = { ctx ->
+                MapView(ctx).apply {
+                    // Use standard OpenStreetMap tiles (Mapnik style)
+                    setTileSource(TileSourceFactory.MAPNIK)
+                    // Enable pinch-to-zoom and two-finger rotate
+                    setMultiTouchControls(true)
+                    // Disable the default +/- zoom buttons (we have our own controls)
+                    zoomController.setVisibility(
+                        org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER
                     )
+                    // Set initial zoom and center (San Francisco fallback, will be overridden by GPS)
+                    controller.setZoom(14.0)
+                    controller.setCenter(GeoPoint(37.7749, -122.4194))
+
+                    // Start the map's tile loading
+                    onResume()
+
+                    // Store reference for use in Compose callbacks (recenter, etc.)
+                    mapView = this
                 }
+            },
+            update = { mv ->
+                // Clear all existing marker overlays and re-add from current state.
+                // This runs on every recomposition when uiState.riders changes,
+                // keeping markers perfectly in sync with Firebase data.
+                mv.overlays.clear()
+
+                uiState.riders.forEach { riderItem ->
+                    val rider = riderItem.rider
+                    if (rider.lat != 0.0 && rider.lng != 0.0) {
+                        val position = GeoPoint(rider.lat, rider.lng)
+                        val status = rider.riderStatus
+
+                        val titleText = if (riderItem.isCurrentUser) {
+                            "${rider.name} (You) ${status.emoji}"
+                        } else {
+                            "${rider.name} ${status.emoji}"
+                        }
+
+                        val snippetText = if (riderItem.isCurrentUser) {
+                            "Status: ${status.displayName}"
+                        } else {
+                            "Status: ${status.displayName} • ${riderItem.formattedDistance} • ${LocationUtils.formatTimeAgo(rider.lastUpdated)}"
+                        }
+
+                        // Get or create the custom pin bitmap for this status
+                        val markerBitmap = markerBitmapCache.getOrPut(status) {
+                            createStatusMarkerBitmap(status)
+                        }
+
+                        // Create an osmdroid Marker and configure it
+                        val marker = OsmMarker(mv).apply {
+                            this.position = position
+                            this.title = titleText
+                            this.snippet = snippetText
+                            // Wrap the Bitmap in a BitmapDrawable (osmdroid's equivalent
+                            // of Google Maps' BitmapDescriptor)
+                            this.icon = BitmapDrawable(mv.context.resources, markerBitmap)
+                            // Anchor at bottom-center of the pin image so the pointer
+                            // tip sits exactly on the rider's GPS coordinates
+                            setAnchor(OsmMarker.ANCHOR_CENTER, OsmMarker.ANCHOR_BOTTOM)
+                            // Handle marker tap — select rider and show info window
+                            setOnMarkerClickListener { clickedMarker, _ ->
+                                viewModel.selectRider(riderItem)
+                                clickedMarker.showInfoWindow()
+                                true
+                            }
+                        }
+                        mv.overlays.add(marker)
+                    }
+                }
+
+                // Trigger a redraw so the new markers appear immediately
+                mv.invalidate()
             }
-        }
+        )
 
         // 2. Top Header Bar: Ride Code + Copy Button + Leave Button
         TopRideBar(
@@ -260,20 +306,14 @@ fun LiveMapScreen(
                 val lat = currentRider?.rider?.lat ?: 0.0
                 val lng = currentRider?.rider?.lng ?: 0.0
                 if (lat != 0.0 && lng != 0.0) {
-                    coroutineScope.launch {
-                        cameraPositionState.animate(
-                            CameraUpdateFactory.newLatLngZoom(LatLng(lat, lng), 16f)
-                        )
-                    }
+                    mapView?.controller?.animateTo(GeoPoint(lat, lng), 16.0, 1000L)
                 } else {
                     try {
                         fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
                             if (loc != null) {
-                                coroutineScope.launch {
-                                    cameraPositionState.animate(
-                                        CameraUpdateFactory.newLatLngZoom(LatLng(loc.latitude, loc.longitude), 16f)
-                                    )
-                                }
+                                mapView?.controller?.animateTo(
+                                    GeoPoint(loc.latitude, loc.longitude), 16.0, 1000L
+                                )
                             } else {
                                 Toast.makeText(context, "Acquiring GPS location...", Toast.LENGTH_SHORT).show()
                             }
@@ -309,11 +349,7 @@ fun LiveMapScreen(
                     val lat = riderItem.rider.lat
                     val lng = riderItem.rider.lng
                     if (lat != 0.0 && lng != 0.0) {
-                        coroutineScope.launch {
-                            cameraPositionState.animate(
-                                CameraUpdateFactory.newLatLngZoom(LatLng(lat, lng), 16f)
-                            )
-                        }
+                        mapView?.controller?.animateTo(GeoPoint(lat, lng), 16.0, 1000L)
                     }
                 },
                 onDismiss = { viewModel.closeRiderList() }

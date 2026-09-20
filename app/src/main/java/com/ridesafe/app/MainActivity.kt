@@ -58,12 +58,8 @@ class MainActivity : ComponentActivity() {
         try {
             com.google.firebase.appdistribution.FirebaseAppDistribution.getInstance()
                 .updateIfNewReleaseAvailable()
-                .addOnSuccessListener { release ->
-                    if (release != null) {
-                        android.util.Log.d("BhaijiRide", "New release available: ${release.displayVersion} (${release.versionCode})")
-                    } else {
-                        android.util.Log.d("BhaijiRide", "Already running latest version.")
-                    }
+                .addOnSuccessListener {
+                    android.util.Log.d("BhaijiRide", "Update check completed successfully.")
                 }
                 .addOnFailureListener { e ->
                     android.util.Log.w("BhaijiRide", "Firebase update check note: ${e.message}")

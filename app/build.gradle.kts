@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -8,14 +6,7 @@ plugins {
     alias(libs.plugins.firebase.appdistribution)
 }
 
-// Load local.properties to read GOOGLE_MAPS_API_KEY if present
-val localProperties = Properties().apply {
-    val localPropertiesFile = rootProject.file("local.properties")
-    if (localPropertiesFile.exists()) {
-        load(localPropertiesFile.inputStream())
-    }
-}
-val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY") ?: "YOUR_MAPS_API_KEY_HERE"
+
 
 android {
     namespace = "com.ridesafe.app"
@@ -32,8 +23,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Inject Google Maps API Key into AndroidManifest.xml
-        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     buildTypes {
@@ -80,10 +69,11 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     debugImplementation(libs.androidx.ui.tooling)
 
-    // Play Services Location & Google Maps Compose
+    // Play Services Location (GPS provider — free, no API key needed)
     implementation(libs.play.services.location)
-    implementation(libs.play.services.maps)
-    implementation(libs.maps.compose)
+
+    // OpenStreetMap via osmdroid (free map tiles, no API key)
+    implementation(libs.osmdroid)
 
     // Firebase (Realtime Database, Anonymous Auth & App Distribution)
     implementation(platform(libs.firebase.bom))
