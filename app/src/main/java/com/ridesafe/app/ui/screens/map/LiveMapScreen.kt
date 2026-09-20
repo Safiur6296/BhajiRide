@@ -531,7 +531,7 @@ private fun TopRideBar(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                    imageVector = Icons.Filled.ExitToApp,
                     contentDescription = "Leave Ride",
                     tint = StatusRed,
                     modifier = Modifier.size(20.dp)
