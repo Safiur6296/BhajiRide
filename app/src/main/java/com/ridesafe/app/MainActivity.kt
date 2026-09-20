@@ -7,8 +7,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.ridesafe.app.data.model.AppUpdateInfo
+import com.ridesafe.app.ui.components.UpdateDialog
 import com.ridesafe.app.ui.navigation.RideNavGraph
 import com.ridesafe.app.ui.theme.RideSafeTheme
+import com.ridesafe.app.util.AppUpdateManager
 import com.ridesafe.app.util.PermissionHelper
 
 /**
@@ -47,6 +55,21 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // In-app direct update checking (no external testing tool required)
+            var availableUpdate by remember { mutableStateOf<AppUpdateInfo?>(null) }
+            val updateManager = remember { AppUpdateManager(this@MainActivity) }
+
+            LaunchedEffect(Unit) {
+                try {
+                    val update = updateManager.checkForUpdates()
+                    if (update != null) {
+                        availableUpdate = update
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("BhaijiRide", "Update check failed: ${e.message}")
+                }
+            }
+
             RideSafeTheme {
                 RideNavGraph(
                     onRequestPermissions = {
@@ -54,24 +77,15 @@ class MainActivity : ComponentActivity() {
                         permissionLauncher.launch(required)
                     }
                 )
-            }
-        }
-    }
 
-    override fun onResume() {
-        super.onResume()
-        // Prompt user to update whenever a new build is uploaded to Firebase App Distribution
-        try {
-            com.google.firebase.appdistribution.FirebaseAppDistribution.getInstance()
-                .updateIfNewReleaseAvailable()
-                .addOnSuccessListener {
-                    android.util.Log.d("BhaijiRide", "Update check completed successfully.")
+                // Render in-app update prompt dialog if a newer build is available
+                availableUpdate?.let { updateInfo ->
+                    UpdateDialog(
+                        updateInfo = updateInfo,
+                        onDismiss = { availableUpdate = null }
+                    )
                 }
-                .addOnFailureListener { e ->
-                    android.util.Log.w("BhaijiRide", "Firebase update check note: ${e.message}")
-                }
-        } catch (e: Exception) {
-            android.util.Log.e("BhaijiRide", "Error invoking update check: ${e.message}")
+            }
         }
     }
 }
