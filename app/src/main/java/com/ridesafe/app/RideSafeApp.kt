@@ -32,10 +32,15 @@ class RideSafeApp : Application() {
         // Enable Firebase Realtime Database disk persistence so that if a rider briefly
         // loses cell signal on the highway, updates are queued locally and synced once reconnected.
         try {
-            FirebaseDatabase.getInstance().setPersistenceEnabled(true)
+            FirebaseDatabase.getInstance("https://ridesafe-a46dc-default-rtdb.asia-southeast1.firebasedatabase.app")
+                .setPersistenceEnabled(true)
         } catch (e: Exception) {
             // Persistence must be set before any database reference is created.
-            // Catching if already initialized during tests or previews.
+        }
+        try {
+            FirebaseDatabase.getInstance().setPersistenceEnabled(true)
+        } catch (e: Exception) {
+            // Fallback for default instance
         }
 
         // 2. Create Notification Channel for the Foreground Service

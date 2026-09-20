@@ -31,21 +31,19 @@ import kotlin.coroutines.resumeWithException
  */
 class RideRepository {
 
+    companion object {
+        const val DATABASE_URL = "https://ridesafe-a46dc-default-rtdb.asia-southeast1.firebasedatabase.app"
+    }
+
     private val database by lazy {
         try {
-            FirebaseDatabase.getInstance()
+            FirebaseDatabase.getInstance(DATABASE_URL)
         } catch (e: Exception) {
-            FirebaseDatabase.getInstance("https://ridesafe-a46dc-default-rtdb.firebaseio.com")
+            FirebaseDatabase.getInstance()
         }
     }
     private val auth by lazy { FirebaseAuth.getInstance() }
-    private val ridesRef by lazy {
-        database.getReference("rides").also {
-            // Keep ride data actively synced to local cache so joinRide can
-            // resolve from cache on slow connections
-            it.keepSynced(true)
-        }
-    }
+    private val ridesRef by lazy { database.getReference("rides") }
 
     /**
      * Ensures the current user is authenticated anonymously with Firebase.
@@ -102,6 +100,7 @@ class RideRepository {
             // Write session metadata and the creator into Firebase.
             // In Firebase RTDB, writes are cached locally and synchronized to the cloud.
             val sessionRef = ridesRef.child(rideCode)
+            sessionRef.keepSynced(true)
             sessionRef.child("session").setValue(session)
             sessionRef.child("riders").child(riderId).setValue(initialRider)
 
@@ -121,8 +120,8 @@ class RideRepository {
             val cleanCode = rideCode.trim().uppercase()
             val riderId = getOrCreateRiderId()
 
-            // Enable local disk persistence for the rides path so it doesn't require
-            // a fresh server fetch every time
+            // Enable local cache sync for this specific ride session
+            ridesRef.child(cleanCode).keepSynced(true)
             val sessionRef = ridesRef.child(cleanCode).child("session")
 
             // Use addListenerForSingleValueEvent which can serve from Firebase's
@@ -172,8 +171,8 @@ class RideRepository {
             )
 
             // Add this rider to the ride's riders node.
-            // setValue is cached locally and synced when online, so this won't block.
-            ridesRef.child(cleanCode).child("riders").child(riderId).setValue(rider).await()
+            // setValue writes to local cache and synchronizes to Firebase Realtime Database
+            ridesRef.child(cleanCode).child("riders").child(riderId).setValue(rider)
 
             Result.success(riderId)
         } catch (e: Exception) {
@@ -255,6 +254,111 @@ class RideRepository {
             ridesRef.child(rideCode).child("riders").child(riderId).removeValue()
         } catch (e: Exception) {
             // Log or ignore network errors on exit
+        }
+    }
+
+    /**
+     * Checks whether a ride session is still active in Firebase Realtime Database.
+     * A ride is active if its node exists, session.active is true, and it has at least one rider.
+     */
+    suspend fun isRideActive(rideCode: String): Boolean {
+        return try {
+            val cleanCode = rideCode.trim().uppercase()
+            val rideNodeRef = ridesRef.child(cleanCode)
+
+            val snapshot = withTimeoutOrNull(8000L) {
+                suspendCancellableCoroutine { continuation ->
+                    val listener = object : ValueEventListener {
+                        override fun onDataChange(dataSnapshot: DataSnapshot) {
+                            if (continuation.isActive) {
+                                continuation.resume(dataSnapshot)
+                            }
+                        }
+
+                        override fun onCancelled(error: DatabaseError) {
+                            if (continuation.isActive) {
+                                continuation.resume(null)
+                            }
+                        }
+                    }
+                    rideNodeRef.addListenerForSingleValueEvent(listener)
+                    continuation.invokeOnCancellation {
+                        rideNodeRef.removeEventListener(listener)
+                    }
+                }
+            }
+
+            if (snapshot == null || !snapshot.exists()) {
+                return false
+            }
+
+            val sessionNode = snapshot.child("session")
+            if (!sessionNode.exists()) {
+                return false
+            }
+
+            val sessionActive = sessionNode.child("active").getValue(Boolean::class.java) ?: true
+            val ridersNode = snapshot.child("riders")
+            val hasRiders = ridersNode.exists() && ridersNode.childrenCount > 0
+
+            hasRiders && sessionActive
+        } catch (e: Exception) {
+            Log.e("RideRepository", "Error checking isRideActive for $rideCode", e)
+            false
+        }
+    }
+
+    /**
+     * Re-registers an existing rider into an active ride session using their saved riderId.
+     */
+    suspend fun rejoinRide(rideCode: String, riderId: String, riderName: String): Result<Unit> {
+        return try {
+            val cleanCode = rideCode.trim().uppercase()
+            ridesRef.child(cleanCode).keepSynced(true)
+            val sessionRef = ridesRef.child(cleanCode).child("session")
+
+            val snapshot = withTimeoutOrNull(10000L) {
+                suspendCancellableCoroutine { continuation ->
+                    val listener = object : ValueEventListener {
+                        override fun onDataChange(dataSnapshot: DataSnapshot) {
+                            if (continuation.isActive) {
+                                continuation.resume(dataSnapshot)
+                            }
+                        }
+
+                        override fun onCancelled(error: DatabaseError) {
+                            if (continuation.isActive) {
+                                continuation.resumeWithException(error.toException())
+                            }
+                        }
+                    }
+                    sessionRef.addListenerForSingleValueEvent(listener)
+                    continuation.invokeOnCancellation {
+                        sessionRef.removeEventListener(listener)
+                    }
+                }
+            }
+
+            if (snapshot == null) {
+                return Result.failure(Exception("Could not connect to Firebase. Check internet connection."))
+            }
+
+            if (!snapshot.exists()) {
+                return Result.failure(IllegalArgumentException("Ride '$cleanCode' not found. It may have been ended."))
+            }
+
+            val rider = Rider(
+                id = riderId,
+                name = riderName.trim().ifEmpty { "Rider" },
+                status = RiderStatus.RIDING.name,
+                lastUpdated = System.currentTimeMillis()
+            )
+
+            ridesRef.child(cleanCode).child("riders").child(riderId).setValue(rider)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("RideRepository", "rejoinRide failed for $rideCode", e)
+            Result.failure(e)
         }
     }
 }
