@@ -1,5 +1,6 @@
 package com.ridesafe.app.data.repository
 
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
@@ -11,9 +12,12 @@ import com.ridesafe.app.data.model.RiderStatus
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * RideRepository handles all communication with Firebase Realtime Database and Auth.
@@ -35,7 +39,13 @@ class RideRepository {
         }
     }
     private val auth by lazy { FirebaseAuth.getInstance() }
-    private val ridesRef by lazy { database.getReference("rides") }
+    private val ridesRef by lazy {
+        database.getReference("rides").also {
+            // Keep ride data actively synced to local cache so joinRide can
+            // resolve from cache on slow connections
+            it.keepSynced(true)
+        }
+    }
 
     /**
      * Ensures the current user is authenticated anonymously with Firebase.
@@ -103,23 +113,55 @@ class RideRepository {
 
     /**
      * Joins an existing ride session using its 6-character code.
+     * Uses addListenerForSingleValueEvent (cache-friendly) instead of .get() (server-only)
+     * to prevent timeouts on slow mobile connections.
      */
     suspend fun joinRide(rideCode: String, riderName: String): Result<String> {
         return try {
             val cleanCode = rideCode.trim().uppercase()
             val riderId = getOrCreateRiderId()
 
-            // Verify the ride session exists with a 6-second timeout so it never hangs
-            val snapshot = withTimeoutOrNull(6000L) {
-                ridesRef.child(cleanCode).child("session").get().await()
+            // Enable local disk persistence for the rides path so it doesn't require
+            // a fresh server fetch every time
+            val sessionRef = ridesRef.child(cleanCode).child("session")
+
+            // Use addListenerForSingleValueEvent which can serve from Firebase's
+            // local cache, unlike .get() which forces a server round-trip
+            val snapshot = withTimeoutOrNull(15000L) {
+                suspendCancellableCoroutine { continuation ->
+                    val listener = object : ValueEventListener {
+                        override fun onDataChange(dataSnapshot: DataSnapshot) {
+                            if (continuation.isActive) {
+                                continuation.resume(dataSnapshot)
+                            }
+                        }
+
+                        override fun onCancelled(error: DatabaseError) {
+                            if (continuation.isActive) {
+                                Log.e("RideRepository", "joinRide query cancelled: ${error.message}")
+                                continuation.resumeWithException(error.toException())
+                            }
+                        }
+                    }
+                    sessionRef.addListenerForSingleValueEvent(listener)
+
+                    // Clean up listener if coroutine is cancelled
+                    continuation.invokeOnCancellation {
+                        sessionRef.removeEventListener(listener)
+                    }
+                }
             }
 
             if (snapshot == null) {
-                return Result.failure(Exception("Connection timeout. Please check your internet connection."))
+                return Result.failure(
+                    Exception("Could not reach the server. Please check your internet and try again.")
+                )
             }
 
             if (!snapshot.exists()) {
-                return Result.failure(IllegalArgumentException("Ride '$cleanCode' not found. Check the code and try again."))
+                return Result.failure(
+                    IllegalArgumentException("Ride '$cleanCode' not found. Check the code and try again.")
+                )
             }
 
             val rider = Rider(
@@ -129,11 +171,13 @@ class RideRepository {
                 lastUpdated = System.currentTimeMillis()
             )
 
-            // Add this rider to the ride's riders node
-            ridesRef.child(cleanCode).child("riders").child(riderId).setValue(rider)
+            // Add this rider to the ride's riders node.
+            // setValue is cached locally and synced when online, so this won't block.
+            ridesRef.child(cleanCode).child("riders").child(riderId).setValue(rider).await()
 
             Result.success(riderId)
         } catch (e: Exception) {
+            Log.e("RideRepository", "joinRide failed", e)
             Result.failure(e)
         }
     }

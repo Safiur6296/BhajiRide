@@ -194,10 +194,11 @@ fun LiveMapScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(BikerDarkBg)) {
-        // 1. Interactive OpenStreetMap with live rider markers
-        //    AndroidView bridges the imperative osmdroid MapView into declarative Compose.
-        //    - factory: creates the MapView once
-        //    - update: called on every recomposition to sync markers with uiState
+        // Extract rider data so Compose tracks it as a dependency for recomposition.
+        // Reading uiState.riders OUTSIDE the AndroidView lambda ensures Compose knows
+        // to re-invoke update{} whenever the riders list changes (status, position, etc.)
+        val riders = uiState.riders
+
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -223,11 +224,11 @@ fun LiveMapScreen(
             },
             update = { mv ->
                 // Clear all existing marker overlays and re-add from current state.
-                // This runs on every recomposition when uiState.riders changes,
+                // This runs on every recomposition when riders list changes,
                 // keeping markers perfectly in sync with Firebase data.
                 mv.overlays.clear()
 
-                uiState.riders.forEach { riderItem ->
+                riders.forEach { riderItem ->
                     val rider = riderItem.rider
                     if (rider.lat != 0.0 && rider.lng != 0.0) {
                         val position = GeoPoint(rider.lat, rider.lng)
