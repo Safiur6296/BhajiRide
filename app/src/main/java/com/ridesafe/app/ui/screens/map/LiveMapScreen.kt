@@ -58,8 +58,16 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Navigation
 import com.google.android.gms.location.LocationServices
 import com.ridesafe.app.ui.theme.RideSafeTheme
 import com.ridesafe.app.data.model.RiderStatus
@@ -79,40 +87,88 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker as OsmMarker
 
 /**
- * Creates a custom map pin bitmap with the rider's status color and status emoji.
- * Returns a raw Bitmap (wrapped in BitmapDrawable at the usage site for osmdroid).
+ * Creates a custom map pin bitmap with the rider's name and status emoji.
+ * Displays e.g. "🏍️ Rahul (You)" or "⛽ Sahil" inside a sleek rounded pill
+ * with an inverted pointer triangle pointing to the GPS coordinate.
  */
-private fun createStatusMarkerBitmap(status: RiderStatus): Bitmap {
-    val width = 120
-    val height = 145
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+private fun createRiderMarkerBitmap(name: String, status: RiderStatus, isCurrentUser: Boolean): Bitmap {
+    val displayName = if (isCurrentUser) {
+        "${name.trim().ifEmpty { "You" }} (You)"
+    } else {
+        name.trim().ifEmpty { "Rider" }
+    }
+
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 34f
+        color = android.graphics.Color.WHITE
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+
+    val emojiPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 38f
+        textAlign = Paint.Align.LEFT
+    }
+
+    val textWidth = textPaint.measureText(displayName)
+    val horizontalPadding = 26f
+    val emojiWidth = 46f
+    val spacing = 12f
+    val contentWidth = emojiWidth + spacing + textWidth
+
+    val pillWidth = (contentWidth + horizontalPadding * 2f).coerceAtLeast(130f)
+    val pillHeight = 74f
+    val pointerHeight = 22f
+    val totalHeight = pillHeight + pointerHeight
+
+    val bitmap = Bitmap.createBitmap(pillWidth.toInt(), totalHeight.toInt(), Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
 
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#171A21")
+        style = Paint.Style.FILL
+    }
 
-    // 1. Outer circle matching status color
-    paint.color = status.color.toArgb()
-    paint.style = Paint.Style.FILL
-    canvas.drawCircle(width / 2f, 55f, 50f, paint)
+    val strokeColor = if (isCurrentUser) {
+        android.graphics.Color.parseColor("#FFC107")
+    } else {
+        status.color.toArgb()
+    }
 
-    // 2. Inner white circular badge
-    paint.color = android.graphics.Color.WHITE
-    canvas.drawCircle(width / 2f, 55f, 40f, paint)
+    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = strokeColor
+        style = Paint.Style.STROKE
+        strokeWidth = if (isCurrentUser) 5f else 3.5f
+    }
 
-    // 3. Status Emoji in center
-    paint.textSize = 46f
-    paint.textAlign = Paint.Align.CENTER
-    val emojiY = 55f - ((paint.descent() + paint.ascent()) / 2f)
-    canvas.drawText(status.emoji, width / 2f, emojiY, paint)
+    val fillAccentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = strokeColor
+        style = Paint.Style.FILL
+    }
 
-    // 4. Pin triangle pointer at the bottom
-    val path = Path()
-    path.moveTo(width / 2f - 16f, 96f)
-    path.lineTo(width / 2f + 16f, 96f)
-    path.lineTo(width / 2f, 136f)
-    path.close()
-    paint.color = status.color.toArgb()
-    canvas.drawPath(path, paint)
+    // Draw rounded badge rectangle
+    val rect = RectF(4f, 4f, pillWidth - 4f, pillHeight - 4f)
+    canvas.drawRoundRect(rect, 36f, 36f, bgPaint)
+    canvas.drawRoundRect(rect, 36f, 36f, strokePaint)
+
+    // Draw pointer pin triangle at bottom center
+    val centerX = pillWidth / 2f
+    val pointerPath = Path().apply {
+        moveTo(centerX - 14f, pillHeight - 4f)
+        lineTo(centerX + 14f, pillHeight - 4f)
+        lineTo(centerX, totalHeight - 2f)
+        close()
+    }
+    canvas.drawPath(pointerPath, fillAccentPaint)
+
+    // Draw status emoji
+    val startX = (pillWidth - contentWidth) / 2f
+    val emojiBaseline = pillHeight / 2f - ((emojiPaint.descent() + emojiPaint.ascent()) / 2f)
+    canvas.drawText(status.emoji, startX, emojiBaseline, emojiPaint)
+
+    // Draw name text
+    val textStartX = startX + emojiWidth + spacing
+    val textBaseline = pillHeight / 2f - ((textPaint.descent() + textPaint.ascent()) / 2f)
+    canvas.drawText(displayName, textStartX, textBaseline, textPaint)
 
     return bitmap
 }
@@ -134,8 +190,8 @@ fun LiveMapScreen(
     val coroutineScope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
 
-    // Cache marker bitmaps by status so we don't recreate them every recomposition
-    val markerBitmapCache = remember { mutableMapOf<RiderStatus, Bitmap>() }
+    // Cache marker bitmaps by unique rider identity so we don't recreate them every recomposition
+    val markerBitmapCache = remember { mutableMapOf<String, Bitmap>() }
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     // Hold a reference to the osmdroid MapView so we can control it from Compose callbacks
@@ -172,14 +228,15 @@ fun LiveMapScreen(
         }
     }
 
-    // Also update camera when current rider GPS coordinates arrive from Firebase
+    // Also update camera when current rider GPS coordinates arrive from Firebase or local sensor
     val currentRider = uiState.riders.find { it.isCurrentUser }
     LaunchedEffect(currentRider?.rider?.lat, currentRider?.rider?.lng) {
         val lat = currentRider?.rider?.lat ?: 0.0
         val lng = currentRider?.rider?.lng ?: 0.0
         if (!hasCenteredInitialLocation && lat != 0.0 && lng != 0.0) {
             mapView?.controller?.let { controller ->
-                controller.animateTo(GeoPoint(lat, lng), 15.5, 1000L)
+                controller.setZoom(16.0)
+                controller.animateTo(GeoPoint(lat, lng), 16.0, 800L)
             }
             hasCenteredInitialLocation = true
         }
@@ -211,9 +268,21 @@ fun LiveMapScreen(
                     zoomController.setVisibility(
                         org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER
                     )
-                    // Set initial zoom and center (San Francisco fallback, will be overridden by GPS)
+                    // Set initial zoom and center (will be overridden by GPS)
                     controller.setZoom(14.0)
-                    controller.setCenter(GeoPoint(37.7749, -122.4194))
+                    controller.setCenter(GeoPoint(28.6139, 77.2090))
+
+                    // Center camera immediately if location available
+                    try {
+                        fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                            if (loc != null && !hasCenteredInitialLocation) {
+                                controller.setZoom(15.5)
+                                controller.setCenter(GeoPoint(loc.latitude, loc.longitude))
+                                hasCenteredInitialLocation = true
+                            }
+                        }
+                    } catch (e: SecurityException) {
+                    }
 
                     // Start the map's tile loading
                     onResume()
@@ -246,9 +315,10 @@ fun LiveMapScreen(
                             "Status: ${status.displayName} • ${riderItem.formattedDistance} • ${LocationUtils.formatTimeAgo(rider.lastUpdated)}"
                         }
 
-                        // Get or create the custom pin bitmap for this status
-                        val markerBitmap = markerBitmapCache.getOrPut(status) {
-                            createStatusMarkerBitmap(status)
+                        // Get or create the custom pin bitmap displaying name + status emoji
+                        val cacheKey = "${rider.id}_${rider.name}_${status.name}_${riderItem.isCurrentUser}"
+                        val markerBitmap = markerBitmapCache.getOrPut(cacheKey) {
+                            createRiderMarkerBitmap(rider.name, status, riderItem.isCurrentUser)
                         }
 
                         // Create an osmdroid Marker and configure it
@@ -256,8 +326,7 @@ fun LiveMapScreen(
                             this.position = position
                             this.title = titleText
                             this.snippet = snippetText
-                            // Wrap the Bitmap in a BitmapDrawable (osmdroid's equivalent
-                            // of Google Maps' BitmapDescriptor)
+                            // Wrap the Bitmap in a BitmapDrawable
                             this.icon = BitmapDrawable(mv.context.resources, markerBitmap)
                             // Anchor at bottom-center of the pin image so the pointer
                             // tip sits exactly on the rider's GPS coordinates
@@ -297,7 +366,23 @@ fun LiveMapScreen(
                 .padding(16.dp)
         )
 
-        // 3. Bottom Control Dock: Stop Status Button + Rider List + Recenter
+        // 3. Proximity Radar Box: Shows relative distance and ahead/behind status for all riders
+        RiderProximityBox(
+            riders = uiState.riders,
+            onRiderClick = { riderItem ->
+                val lat = riderItem.rider.lat
+                val lng = riderItem.rider.lng
+                if (lat != 0.0 && lng != 0.0) {
+                    mapView?.controller?.animateTo(GeoPoint(lat, lng), 16.0, 1000L)
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(start = 16.dp, end = 16.dp, bottom = 86.dp)
+        )
+
+        // 4. Bottom Control Dock: Stop Status Button + Rider List + Recenter
         BottomControlDock(
             myStatus = uiState.myStatus,
             riderCount = uiState.riders.size,
@@ -446,7 +531,7 @@ private fun TopRideBar(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.ExitToApp,
+                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                     contentDescription = "Leave Ride",
                     tint = StatusRed,
                     modifier = Modifier.size(20.dp)
@@ -545,6 +630,189 @@ private fun BottomControlDock(
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
+        }
+    }
+}
+
+/**
+ * RiderProximityBox displays a floating dashboard showing the relative position and distance
+ * of all fellow group riders (e.g. "Rahul is 10 KM ahead of You", "Sahil is 5 KM behind you").
+ */
+@Composable
+fun RiderProximityBox(
+    riders: List<RiderWithDistance>,
+    onRiderClick: (RiderWithDistance) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val fellowRiders = riders.filter { !it.isCurrentUser }
+    var isExpanded by remember { mutableStateOf(true) }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(BikerCardBg.copy(alpha = 0.94f))
+            .border(1.dp, BikerBorder, RoundedCornerShape(18.dp))
+            .padding(14.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Header Bar with Expand / Collapse
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Navigation,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "RIDER RADAR",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextMuted,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "${fellowRiders.size} ${if (fellowRiders.size == 1) "RIDER" else "RIDERS"}",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            AnimatedVisibility(visible = isExpanded) {
+                Column(modifier = Modifier.padding(top = 10.dp)) {
+                    if (fellowRiders.isEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🏍️",
+                                fontSize = 16.sp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Waiting for other riders to join...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextMuted,
+                                fontSize = 13.sp
+                            )
+                        }
+                    } else {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.heightIn(max = 160.dp)
+                        ) {
+                            fellowRiders.forEach { item ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(BikerSurfaceElevated)
+                                        .clickable { onRiderClick(item) }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Direction Badge / Arrow
+                                    when (item.isAhead) {
+                                        true -> {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(26.dp)
+                                                    .clip(CircleShape)
+                                                    .background(androidx.compose.ui.graphics.Color(0xFF1B5E20)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ArrowUpward,
+                                                    contentDescription = "Ahead",
+                                                    tint = androidx.compose.ui.graphics.Color.White,
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                            }
+                                        }
+                                        false -> {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(26.dp)
+                                                    .clip(CircleShape)
+                                                    .background(androidx.compose.ui.graphics.Color(0xFFE65100)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ArrowDownward,
+                                                    contentDescription = "Behind",
+                                                    tint = androidx.compose.ui.graphics.Color.White,
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                            }
+                                        }
+                                        null -> {
+                                            Text(
+                                                text = item.rider.riderStatus.emoji,
+                                                fontSize = 18.sp
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    // Display the exact requested string e.g. "Rahul is 10 KM ahead of You"
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = item.relativePositionText,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary,
+                                            fontSize = 13.sp
+                                        )
+                                        if (item.rider.speed > 0f) {
+                                            Text(
+                                                text = "Speed: ${LocationUtils.formatSpeed(item.rider.speed)} • ${item.rider.riderStatus.displayName}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = item.rider.riderStatus.color,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                    }
+
+                                    // Status Emoji
+                                    Text(
+                                        text = item.rider.riderStatus.emoji,
+                                        fontSize = 18.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

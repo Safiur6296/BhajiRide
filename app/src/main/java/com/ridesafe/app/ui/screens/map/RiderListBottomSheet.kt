@@ -226,6 +226,17 @@ private fun RiderListItem(
                     fontSize = 12.sp
                 )
             }
+
+            if (!riderItem.isCurrentUser && riderItem.relativePositionText.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = riderItem.relativePositionText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (riderItem.isAhead == true) androidx.compose.ui.graphics.Color(0xFF81C784) else androidx.compose.ui.graphics.Color(0xFFFFB74D),
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 11.sp
+                )
+            }
         }
 
         // Distance / Speed badge

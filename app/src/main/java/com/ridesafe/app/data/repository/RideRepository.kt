@@ -191,24 +191,26 @@ class RideRepository {
         lng: Double,
         speed: Float
     ) {
+        val cleanCode = rideCode.trim().uppercase()
         val updates = mapOf<String, Any>(
             "lat" to lat,
             "lng" to lng,
             "speed" to speed,
             "lastUpdated" to System.currentTimeMillis()
         )
-        ridesRef.child(rideCode).child("riders").child(riderId).updateChildren(updates)
+        ridesRef.child(cleanCode).child("riders").child(riderId).updateChildren(updates)
     }
 
     /**
      * Updates the current rider's stop status (e.g. Refueling, Emergency, Rest Stop).
      */
     fun updateStatus(rideCode: String, riderId: String, status: RiderStatus) {
+        val cleanCode = rideCode.trim().uppercase()
         val updates = mapOf<String, Any>(
             "status" to status.name,
             "lastUpdated" to System.currentTimeMillis()
         )
-        ridesRef.child(rideCode).child("riders").child(riderId).updateChildren(updates)
+        ridesRef.child(cleanCode).child("riders").child(riderId).updateChildren(updates)
     }
 
     /**
@@ -251,7 +253,8 @@ class RideRepository {
      */
     fun leaveRide(rideCode: String, riderId: String) {
         try {
-            ridesRef.child(rideCode).child("riders").child(riderId).removeValue()
+            val cleanCode = rideCode.trim().uppercase()
+            ridesRef.child(cleanCode).child("riders").child(riderId).removeValue()
         } catch (e: Exception) {
             // Log or ignore network errors on exit
         }
