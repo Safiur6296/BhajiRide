@@ -6,4 +6,6 @@
     <external-files-path name="external_files" path="." />
     <!-- App-specific external cache directory -->
     <external-cache-path name="external_cache" path="." />
+    <!-- Primary shared external storage path -->
+    <external-path name="external_storage" path="." />
 </paths>

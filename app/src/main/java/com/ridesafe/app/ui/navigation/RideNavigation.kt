@@ -19,7 +19,8 @@ import com.ridesafe.app.ui.screens.map.MapViewModel
  */
 @Composable
 fun RideNavGraph(
-    onRequestPermissions: () -> Unit
+    onRequestPermissions: () -> Unit,
+    onCheckForUpdates: () -> Unit = {}
 ) {
     val navController = rememberNavController()
 
@@ -30,6 +31,7 @@ fun RideNavGraph(
         composable("home") {
             HomeScreen(
                 onRequestPermissions = onRequestPermissions,
+                onCheckForUpdates = onCheckForUpdates,
                 onRideJoined = { rideCode, riderId, riderName ->
                     val encodedName = java.net.URLEncoder.encode(riderName, "UTF-8")
                     navController.navigate("map/$rideCode/$riderId/$encodedName") {

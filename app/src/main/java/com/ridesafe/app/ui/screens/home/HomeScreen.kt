@@ -12,6 +12,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.TwoWheeler
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -85,6 +87,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ridesafe.app.BuildConfig
 import com.ridesafe.app.R
 import com.ridesafe.app.data.model.LocalRideSession
 import com.ridesafe.app.data.model.LocalRideSessionUi
@@ -111,6 +114,7 @@ import com.ridesafe.app.util.PermissionHelper
 fun HomeScreen(
     onRequestPermissions: () -> Unit,
     onRideJoined: (rideCode: String, riderId: String, riderName: String) -> Unit,
+    onCheckForUpdates: () -> Unit = {},
     viewModel: HomeViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -138,6 +142,7 @@ fun HomeScreen(
         uiState = uiState,
         hasPermissions = hasPermissions,
         onRequestPermissions = onRequestPermissions,
+        onCheckForUpdates = onCheckForUpdates,
         onRiderNameChange = viewModel::onRiderNameChange,
         onJoinCodeChange = viewModel::onJoinCodeChange,
         onCreateRide = {
@@ -175,6 +180,7 @@ fun HomeScreenContent(
     uiState: HomeUiState,
     hasPermissions: Boolean,
     onRequestPermissions: () -> Unit,
+    onCheckForUpdates: () -> Unit = {},
     onRiderNameChange: (String) -> Unit,
     onJoinCodeChange: (String) -> Unit,
     onCreateRide: () -> Unit,
@@ -329,6 +335,33 @@ fun HomeScreenContent(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp,
+                color = TextSecondary
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Version & In-App Update Trigger Pill
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(BikerSurfaceElevated.copy(alpha = 0.85f))
+                .border(1.dp, BikerBorder.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
+                .clickable { onCheckForUpdates() }
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.SystemUpdate,
+                contentDescription = "Check for Updates",
+                tint = BikerAmber,
+                modifier = Modifier.size(13.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "v${BuildConfig.VERSION_NAME} • Check for Updates",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = TextSecondary
             )
         }

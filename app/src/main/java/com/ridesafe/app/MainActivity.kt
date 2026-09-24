@@ -11,6 +11,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.ridesafe.app.data.model.AppUpdateInfo
 import com.ridesafe.app.ui.components.UpdateDialog
@@ -18,6 +19,7 @@ import com.ridesafe.app.ui.navigation.RideNavGraph
 import com.ridesafe.app.ui.theme.RideSafeTheme
 import com.ridesafe.app.util.AppUpdateManager
 import com.ridesafe.app.util.PermissionHelper
+import kotlinx.coroutines.launch
 
 /**
  * MainActivity is the single Activity hosting our entire Jetpack Compose UI.
@@ -58,6 +60,31 @@ class MainActivity : ComponentActivity() {
             // In-app direct update checking (no external testing tool required)
             var availableUpdate by remember { mutableStateOf<AppUpdateInfo?>(null) }
             val updateManager = remember { AppUpdateManager(this@MainActivity) }
+            val coroutineScope = rememberCoroutineScope()
+
+            val onCheckForUpdates: () -> Unit = {
+                Toast.makeText(this@MainActivity, "Checking for BhaijiRide updates...", Toast.LENGTH_SHORT).show()
+                coroutineScope.launch {
+                    try {
+                        val update = updateManager.checkForUpdates(forceCheck = false)
+                        if (update != null) {
+                            availableUpdate = update
+                        } else {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "BhaijiRide is up to date (v${BuildConfig.VERSION_NAME})",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Update check error: ${e.message}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
 
             LaunchedEffect(Unit) {
                 try {
@@ -66,7 +93,7 @@ class MainActivity : ComponentActivity() {
                         availableUpdate = update
                     }
                 } catch (e: Exception) {
-                    android.util.Log.w("BhaijiRide", "Update check failed: ${e.message}")
+                    android.util.Log.w("BhaijiRide", "Silent update check failed: ${e.message}")
                 }
             }
 
@@ -75,7 +102,8 @@ class MainActivity : ComponentActivity() {
                     onRequestPermissions = {
                         val required = PermissionHelper.getRequiredRidePermissions()
                         permissionLauncher.launch(required)
-                    }
+                    },
+                    onCheckForUpdates = onCheckForUpdates
                 )
 
                 // Render in-app update prompt dialog if a newer build is available

@@ -152,61 +152,40 @@ fun TripPlannerModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = {
-                            focusManager.clearFocus()
-                            onDismiss()
-                        },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(BikerSurfaceElevated)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = TextPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column {
-                        Text(
-                            text = "Plan Convoy Route",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "OpenStreetMap • Photon & OSRM (100% Free)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextMuted,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-
                 IconButton(
                     onClick = {
                         focusManager.clearFocus()
                         onDismiss()
                     },
                     modifier = Modifier
-                        .size(34.dp)
+                        .size(38.dp)
                         .clip(CircleShape)
                         .background(BikerSurfaceElevated)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(18.dp)
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = "Plan Convoy Route",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "OpenStreetMap • Photon & OSRM (100% Free)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        fontSize = 11.sp
                     )
                 }
             }
