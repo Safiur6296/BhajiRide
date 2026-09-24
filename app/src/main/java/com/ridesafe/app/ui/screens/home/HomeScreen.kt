@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,7 +36,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.AltRoute
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -72,7 +72,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -92,19 +91,52 @@ import com.ridesafe.app.R
 import com.ridesafe.app.data.model.LocalRideSession
 import com.ridesafe.app.data.model.LocalRideSessionUi
 import com.ridesafe.app.data.model.PlaceSuggestion
-import com.ridesafe.app.ui.theme.BikerAmber
-import com.ridesafe.app.ui.theme.BikerBorder
-import com.ridesafe.app.ui.theme.BikerCardBg
-import com.ridesafe.app.ui.theme.BikerDarkBg
-import com.ridesafe.app.ui.theme.BikerSurfaceElevated
 import com.ridesafe.app.ui.theme.RideSafeTheme
-import com.ridesafe.app.ui.theme.StatusAmber
-import com.ridesafe.app.ui.theme.StatusGreen
-import com.ridesafe.app.ui.theme.StatusRed
-import com.ridesafe.app.ui.theme.TextMuted
-import com.ridesafe.app.ui.theme.TextPrimary
-import com.ridesafe.app.ui.theme.TextSecondary
 import com.ridesafe.app.util.PermissionHelper
+
+// -------------------------------------------------------------
+// Tesla / Uber-Inspired Premium Dark Theme Tokens for HomeScreen
+// -------------------------------------------------------------
+private val HomeDarkBg = Color(0xFF090B0E)             // Deep charcoal / near-black
+private val HomeCardBg = Color(0xFF13171F)             // Rich charcoal card background
+private val HomeSurfaceElevated = Color(0xFF1B212C)     // Interactive elevated surface
+private val HomeBorder = Color(0xFF26303E)              // Subtle structural border
+
+// Electric Amber-Orange Brand Accents
+private val ElectricAmber = Color(0xFFFF9800)          // Pure electric amber
+private val ElectricAmberBright = Color(0xFFFFA726)    // Glowing amber highlight
+private val ElectricAmberOrange = Color(0xFFFF6D00)    // High-energy electric orange
+
+// Gradients & Glow Brushes
+private val AmberButtonGradient = Brush.horizontalGradient(
+    colors = listOf(
+        Color(0xFFFFA000), // Electric Amber
+        Color(0xFFFF6D00)  // Electric Amber-Orange
+    )
+)
+
+private val AmberGlowBorderBrush = Brush.linearGradient(
+    colors = listOf(
+        ElectricAmber.copy(alpha = 0.55f),
+        Color(0xFF2B3545).copy(alpha = 0.5f),
+        ElectricAmber.copy(alpha = 0.20f)
+    )
+)
+
+private val ActiveRideBorderBrush = Brush.linearGradient(
+    colors = listOf(
+        Color(0xFF10B981).copy(alpha = 0.6f),
+        Color(0xFF26303E),
+        Color(0xFF10B981).copy(alpha = 0.25f)
+    )
+)
+
+// High-contrast clean typography colors
+private val HomeTextPrimary = Color(0xFFF8FAFC)        // Crisp white / platinum
+private val HomeTextSecondary = Color(0xFF94A3B8)      // Clean cool slate
+private val HomeTextMuted = Color(0xFF64748B)          // Muted slate
+private val HomeStatusGreen = Color(0xFF10B981)        // Crisp status green
+private val HomeStatusRed = Color(0xFFEF4444)          // Crisp status red
 
 /**
  * HomeScreen handles rider onboarding: entering a rider name, creating a new ride,
@@ -202,6 +234,8 @@ fun HomeScreenContent(
 ) {
     val focusManager = LocalFocusManager.current
     var sessionToDelete by remember { mutableStateOf<LocalRideSessionUi?>(null) }
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
 
     // Delete Confirmation Dialog
     if (sessionToDelete != null) {
@@ -213,14 +247,14 @@ fun HomeScreenContent(
                     text = "Forget Ride Session?",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = HomeTextPrimary
                 )
             },
             text = {
                 Text(
                     text = "Remove ride \"${session.rideCode}\" from this device? This will only remove it from your local history — active riders in the group won't be affected.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
+                    color = HomeTextSecondary
                 )
             },
             confirmButton = {
@@ -229,8 +263,8 @@ fun HomeScreenContent(
                         onDeleteSession(session.rideCode)
                         sessionToDelete = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = StatusRed),
-                    shape = RoundedCornerShape(10.dp)
+                    colors = ButtonDefaults.buttonColors(containerColor = HomeStatusRed),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("Remove", color = Color.White, fontWeight = FontWeight.Bold)
                 }
@@ -239,700 +273,787 @@ fun HomeScreenContent(
                 TextButton(
                     onClick = { sessionToDelete = null }
                 ) {
-                    Text("Cancel", color = TextSecondary)
+                    Text("Cancel", color = HomeTextSecondary)
                 }
             },
-            containerColor = BikerCardBg,
-            shape = RoundedCornerShape(18.dp)
+            containerColor = HomeCardBg,
+            shape = RoundedCornerShape(20.dp)
         )
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BikerDarkBg)
+            .background(HomeDarkBg)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(BikerDarkBg)
+                .background(HomeDarkBg)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-        Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-        // Hero Emblem & Cockpit Title
-        Box(
-            modifier = Modifier.size(136.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            // Ambient neon crimson/amber halo backlight
+            // -------------------------------------------------------------
+            // 1. Centered circular app icon inside a glowing amber ring
+            // -------------------------------------------------------------
             Box(
-                modifier = Modifier
-                    .size(136.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                StatusRed.copy(alpha = 0.45f),
-                                BikerAmber.copy(alpha = 0.18f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-            )
-
-            // Inner badge framing the motorcycle logo
-            Box(
-                modifier = Modifier
-                    .size(112.dp)
-                    .clip(CircleShape)
-                    .background(BikerCardBg)
-                    .border(2.5.dp, Brush.linearGradient(listOf(StatusRed, BikerAmber)), CircleShape),
+                modifier = Modifier.size(136.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.app_logo),
-                    contentDescription = "BhaijiRide App Logo",
-                    modifier = Modifier
-                        .size(96.dp)
-                        .clip(CircleShape)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "BHAIJI RIDE",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 2.sp,
-            color = TextPrimary
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Subtitle badge pill
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(BikerSurfaceElevated)
-                .border(1.dp, BikerBorder, RoundedCornerShape(20.dp))
-                .padding(horizontal = 12.dp, vertical = 5.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(StatusGreen)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "GPS CONVOY & EMERGENCY SAFETY",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
-                color = TextSecondary
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Version & In-App Update Trigger Pill
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(BikerSurfaceElevated.copy(alpha = 0.85f))
-                .border(1.dp, BikerBorder.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
-                .clickable { onCheckForUpdates() }
-                .padding(horizontal = 12.dp, vertical = 5.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.SystemUpdate,
-                contentDescription = "Check for Updates",
-                tint = BikerAmber,
-                modifier = Modifier.size(13.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "v${BuildConfig.VERSION_NAME} • Check for Updates",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextSecondary
-            )
-        }
-
-        Spacer(modifier = Modifier.height(26.dp))
-
-        // Permission Banner: Disappears automatically when granted
-        AnimatedVisibility(
-            visible = !hasPermissions,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            Column {
+                // Ambient electric amber halo glow backlight
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(StatusAmber.copy(alpha = 0.12f))
-                        .border(1.dp, StatusAmber.copy(alpha = 0.45f), RoundedCornerShape(18.dp))
-                        .padding(16.dp)
+                        .size(136.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    ElectricAmber.copy(alpha = 0.32f),
+                                    ElectricAmber.copy(alpha = 0.10f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+
+                // Glowing amber ring framing the circular motorcycle logo
+                Box(
+                    modifier = Modifier
+                        .size(106.dp)
+                        .clip(CircleShape)
+                        .background(HomeCardBg)
+                        .border(
+                            width = 2.5.dp,
+                            brush = Brush.sweepGradient(
+                                colors = listOf(
+                                    ElectricAmber,
+                                    ElectricAmberBright,
+                                    ElectricAmberOrange,
+                                    ElectricAmber
+                                )
+                            ),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.app_logo),
+                        contentDescription = "BhaijiRide App Logo",
+                        modifier = Modifier
+                            .size(88.dp)
+                            .clip(CircleShape)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // -------------------------------------------------------------
+            // 2. Bold large app name "BHAIJI RIDE"
+            // -------------------------------------------------------------
+            Text(
+                text = "BHAIJI RIDE",
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontFamily = FontFamily.SansSerif,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 30.sp,
+                    letterSpacing = 3.5.sp
+                ),
+                color = HomeTextPrimary,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // -------------------------------------------------------------
+            // 3. Pill-shaped tagline badge with small green status dot
+            // -------------------------------------------------------------
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(HomeSurfaceElevated.copy(alpha = 0.8f))
+                    .border(1.dp, HomeBorder, RoundedCornerShape(20.dp))
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(HomeStatusGreen)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "GPS CONVOY & EMERGENCY SAFETY",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                    color = HomeTextSecondary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // -------------------------------------------------------------
+            // 4. Small muted version / in-app update text row
+            // -------------------------------------------------------------
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onCheckForUpdates() }
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SystemUpdate,
+                    contentDescription = "Check for Updates",
+                    tint = HomeTextMuted,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "v${BuildConfig.VERSION_NAME} • Check for Updates",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = HomeTextMuted,
+                    letterSpacing = 0.3.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(26.dp))
+
+            // Permission Banner (if needed)
+            AnimatedVisibility(
+                visible = !hasPermissions,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(ElectricAmber.copy(alpha = 0.12f))
+                            .border(1.dp, ElectricAmber.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                            .padding(18.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(ElectricAmber.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = ElectricAmber,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Location Permission Needed",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ElectricAmber
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "BhaijiRide requires GPS to share live positions and emergency alerts.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = HomeTextPrimary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = onRequestPermissions,
+                                colors = ButtonDefaults.buttonColors(containerColor = ElectricAmber),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                            ) {
+                                Text("Grant", color = HomeDarkBg, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(22.dp))
+                }
+            }
+
+            // -------------------------------------------------------------
+            // 5. "Rider Callsign" card: outlined amber border, display name
+            //    text field, green "READY" badge in the corner
+            // -------------------------------------------------------------
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(HomeCardBg)
+                    .border(
+                        width = 1.dp,
+                        brush = AmberGlowBorderBrush,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    .padding(20.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.TwoWheeler,
+                                contentDescription = null,
+                                tint = ElectricAmber,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "RIDER CALLSIGN",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ElectricAmber,
+                                letterSpacing = 1.5.sp
+                            )
+                        }
+
+                        // Green "READY" badge in the corner
+                        if (uiState.riderName.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(HomeStatusGreen.copy(alpha = 0.15f))
+                                    .border(1.dp, HomeStatusGreen.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(HomeStatusGreen)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = "READY",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = HomeStatusGreen,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedTextField(
+                        value = uiState.riderName,
+                        onValueChange = onRiderNameChange,
+                        label = { Text("Display Name (e.g. Alex)") },
+                        placeholder = { Text("Enter your callsign") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = if (uiState.riderName.isNotBlank()) ElectricAmber else HomeTextMuted
+                            )
+                        },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ElectricAmber,
+                            unfocusedBorderColor = HomeBorder,
+                            focusedLabelColor = ElectricAmber,
+                            unfocusedLabelColor = HomeTextSecondary,
+                            focusedTextColor = HomeTextPrimary,
+                            unfocusedTextColor = HomeTextPrimary,
+                            focusedContainerColor = HomeSurfaceElevated.copy(alpha = 0.5f),
+                            unfocusedContainerColor = HomeSurfaceElevated.copy(alpha = 0.25f),
+                            cursorColor = ElectricAmber
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(22.dp))
+
+            // -------------------------------------------------------------
+            // 6. "Start a New Convoy" card:
+            //    - Primary amber gradient fill: "Plan Route & Create Ride"
+            //    - Secondary outlined button: "Quick Start (No Route)"
+            // -------------------------------------------------------------
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(HomeCardBg)
+                    .border(
+                        width = 1.dp,
+                        brush = AmberGlowBorderBrush,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    .padding(20.dp)
+            ) {
+                Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(34.dp)
                                 .clip(CircleShape)
-                                .background(StatusAmber.copy(alpha = 0.2f)),
+                                .background(ElectricAmber.copy(alpha = 0.15f))
+                                .border(1.dp, ElectricAmber.copy(alpha = 0.35f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.LocationOn,
+                                imageVector = Icons.Default.Add,
                                 contentDescription = null,
-                                tint = StatusAmber,
-                                modifier = Modifier.size(24.dp)
+                                tint = ElectricAmber,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
                             Text(
-                                text = "Location Permission Needed",
+                                text = "START A NEW CONVOY",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ElectricAmber,
+                                letterSpacing = 1.3.sp
+                            )
+                            Text(
+                                text = "Host a new group ride session",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = StatusAmber
-                            )
-                            Text(
-                                text = "BhaijiRide requires GPS to share live positions and emergency alerts.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TextPrimary,
-                                fontSize = 12.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = onRequestPermissions,
-                            colors = ButtonDefaults.buttonColors(containerColor = StatusAmber),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                        ) {
-                            Text("Grant", color = BikerDarkBg, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(20.dp))
-            }
-        }
-
-        // -------------------------------------------------------------
-        // RIDER IDENTITY CARD
-        // -------------------------------------------------------------
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .background(BikerCardBg)
-                .border(
-                    width = 1.dp,
-                    brush = Brush.horizontalGradient(
-                        listOf(BikerBorder, if (uiState.riderName.isNotBlank()) BikerAmber.copy(alpha = 0.5f) else BikerBorder)
-                    ),
-                    shape = RoundedCornerShape(22.dp)
-                )
-                .padding(20.dp)
-        ) {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.TwoWheeler,
-                            contentDescription = null,
-                            tint = BikerAmber,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "RIDER CALLSIGN",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextMuted,
-                            letterSpacing = 1.2.sp
-                        )
-                    }
-                    if (uiState.riderName.isNotBlank()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(StatusGreen.copy(alpha = 0.15f))
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = StatusGreen,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "READY",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = StatusGreen
+                                color = HomeTextPrimary
                             )
                         }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                OutlinedTextField(
-                    value = uiState.riderName,
-                    onValueChange = onRiderNameChange,
-                    label = { Text("Your Display Name (e.g. Alex)") },
-                    placeholder = { Text("Enter your name") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            tint = if (uiState.riderName.isNotBlank()) BikerAmber else TextSecondary
-                        )
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = BikerAmber,
-                        unfocusedBorderColor = BikerBorder,
-                        focusedLabelColor = BikerAmber,
-                        unfocusedLabelColor = TextSecondary,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        focusedContainerColor = BikerSurfaceElevated.copy(alpha = 0.5f),
-                        unfocusedContainerColor = BikerSurfaceElevated.copy(alpha = 0.3f)
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp)
-                )
-            }
-        }
+                    Text(
+                        text = "Generates a unique 6-letter code to share with your pack for real-time GPS tracking and emergency safety.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = HomeTextSecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    )
 
-        Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
-        // -------------------------------------------------------------
-        // START NEW CONVOY CARD
-        // -------------------------------------------------------------
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .background(BikerCardBg)
-                .border(1.dp, BikerBorder, RoundedCornerShape(22.dp))
-                .padding(20.dp)
-        ) {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
+                    // Primary Button: Amber Gradient Fill
+                    val isPlanButtonEnabled = !uiState.isCreatingRide && !uiState.isJoiningRide && uiState.rejoiningCode == null
+                    Button(
+                        onClick = {
+                            if (!hasPermissions) {
+                                onRequestPermissions()
+                                return@Button
+                            }
+                            focusManager.clearFocus()
+                            onOpenTripPlanner()
+                        },
                         modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(BikerAmber.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .height(54.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                if (isPlanButtonEnabled) AmberButtonGradient
+                                else Brush.horizontalGradient(
+                                    listOf(
+                                        ElectricAmber.copy(alpha = 0.35f),
+                                        ElectricAmber.copy(alpha = 0.25f)
+                                    )
+                                )
+                            ),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent
+                        ),
+                        contentPadding = PaddingValues(),
+                        enabled = isPlanButtonEnabled
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            if (uiState.isCreatingRide) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    color = HomeDarkBg,
+                                    strokeWidth = 2.5.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.AltRoute,
+                                    contentDescription = null,
+                                    tint = HomeDarkBg,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Plan Route & Create Ride",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Black,
+                                    color = HomeDarkBg,
+                                    letterSpacing = 0.3.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Secondary Button: Outlined "Quick Start (No Route)"
+                    OutlinedButton(
+                        onClick = {
+                            if (!hasPermissions) {
+                                onRequestPermissions()
+                            } else {
+                                focusManager.clearFocus()
+                                onCreateRide()
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = HomeTextPrimary,
+                            disabledContentColor = HomeTextMuted
+                        ),
+                        border = BorderStroke(1.dp, HomeBorder),
+                        enabled = isPlanButtonEnabled
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
                             contentDescription = null,
-                            tint = BikerAmber,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "START A NEW CONVOY",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextMuted,
-                            letterSpacing = 1.2.sp
-                        )
-                        Text(
-                            text = "Host a new group ride session",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = "Generates a unique 6-letter code to share with your pack for real-time GPS tracking and emergency safety.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary,
-                    fontSize = 13.sp
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Primary Button: Plan Route & Create Ride
-                Button(
-                    onClick = {
-                        if (!hasPermissions) {
-                            onRequestPermissions()
-                            return@Button
-                        }
-                        focusManager.clearFocus()
-                        onOpenTripPlanner()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BikerAmber),
-                    enabled = !uiState.isCreatingRide && !uiState.isJoiningRide && uiState.rejoiningCode == null
-                ) {
-                    if (uiState.isCreatingRide) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            color = BikerDarkBg,
-                            strokeWidth = 2.5.dp
-                        )
-                    } else {
-                        Icon(Icons.AutoMirrored.Filled.AltRoute, contentDescription = null, tint = BikerDarkBg)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Plan Route & Create Ride",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Black,
-                            color = BikerDarkBg
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Secondary Button: Quick Start without Route
-                OutlinedButton(
-                    onClick = {
-                        if (!hasPermissions) {
-                            onRequestPermissions()
-                        } else {
-                            focusManager.clearFocus()
-                            onCreateRide()
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(46.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BikerBorder),
-                    enabled = !uiState.isCreatingRide && !uiState.isJoiningRide && uiState.rejoiningCode == null
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        tint = TextMuted,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Quick Start (No Route)",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextSecondary
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // -------------------------------------------------------------
-        // JOIN CONVOY CARD
-        // -------------------------------------------------------------
-        val clipboardManager = LocalClipboardManager.current
-        val context = LocalContext.current
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .background(BikerCardBg)
-                .border(1.dp, BikerBorder, RoundedCornerShape(22.dp))
-                .padding(20.dp)
-        ) {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(BikerSurfaceElevated),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            tint = TextPrimary,
+                            tint = if (isPlanButtonEnabled) ElectricAmber else HomeTextMuted,
                             modifier = Modifier.size(18.dp)
                         )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "JOIN EXISTING CONVOY",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextMuted,
-                            letterSpacing = 1.2.sp
-                        )
-                        Text(
-                            text = "Connect with your pack",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                OutlinedTextField(
-                    value = uiState.joinCode,
-                    onValueChange = onJoinCodeChange,
-                    label = { Text("Convoy Code (e.g. MOTO84)") },
-                    placeholder = { Text("ENTER CODE") },
-                    singleLine = true,
-                    textStyle = androidx.compose.ui.text.TextStyle(
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 3.sp,
-                        fontSize = 18.sp
-                    ),
-                    trailingIcon = {
-                        // 1-Tap Paste Button from Clipboard
-                        IconButton(
-                            onClick = {
-                                val clip = clipboardManager.getText()?.text?.trim()?.uppercase()
-                                if (!clip.isNullOrEmpty()) {
-                                    onJoinCodeChange(clip)
-                                    Toast.makeText(context, "Pasted: $clip", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, "Clipboard empty", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentPaste,
-                                contentDescription = "Paste ride code",
-                                tint = BikerAmber,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Characters,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = BikerAmber,
-                        unfocusedBorderColor = BikerBorder,
-                        focusedLabelColor = BikerAmber,
-                        unfocusedLabelColor = TextSecondary,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        focusedContainerColor = BikerSurfaceElevated.copy(alpha = 0.5f),
-                        unfocusedContainerColor = BikerSurfaceElevated.copy(alpha = 0.3f)
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp)
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Button(
-                    onClick = {
-                        if (!hasPermissions) {
-                            onRequestPermissions()
-                            return@Button
-                        }
-                        focusManager.clearFocus()
-                        onJoinRide()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BikerSurfaceElevated),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BikerBorder),
-                    enabled = !uiState.isCreatingRide && !uiState.isJoiningRide && uiState.rejoiningCode == null
-                ) {
-                    if (uiState.isJoiningRide) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            color = BikerAmber,
-                            strokeWidth = 2.5.dp
-                        )
-                    } else {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = TextPrimary)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Join Convoy",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            text = "Quick Start (No Route)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isPlanButtonEnabled) HomeTextPrimary else HomeTextMuted
                         )
                     }
                 }
             }
-        }
 
-        // Error message presentation
-        if (uiState.errorMessage != null) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(22.dp))
+
+            // -------------------------------------------------------------
+            // 7. "Join Existing Convoy" card: code input placeholder,
+            //    paste/clipboard icon, and "Join Convoy" button
+            // -------------------------------------------------------------
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(StatusRed.copy(alpha = 0.15f))
-                    .border(1.dp, StatusRed.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(HomeCardBg)
+                    .border(
+                        width = 1.dp,
+                        brush = AmberGlowBorderBrush,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    .padding(20.dp)
             ) {
-                Text(
-                    text = uiState.errorMessage ?: "",
-                    color = StatusRed,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(HomeSurfaceElevated)
+                                .border(1.dp, HomeBorder, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = ElectricAmber,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "JOIN EXISTING CONVOY",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ElectricAmber,
+                                letterSpacing = 1.3.sp
+                            )
+                            Text(
+                                text = "Connect with your pack",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = HomeTextPrimary
+                            )
+                        }
+                    }
 
-        Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-        // -------------------------------------------------------------
-        // CONVOY SESSIONS HISTORY SECTION
-        // -------------------------------------------------------------
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "RECENT CONVOYS",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextMuted,
-                    letterSpacing = 1.2.sp
-                )
-                if (uiState.sessions.isNotEmpty()) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(BikerSurfaceElevated)
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "${uiState.sessions.size}",
-                            fontSize = 11.sp,
+                    OutlinedTextField(
+                        value = uiState.joinCode,
+                        onValueChange = onJoinCodeChange,
+                        label = { Text("Convoy Code (e.g. MOTO84)") },
+                        placeholder = { Text("ENTER CODE", color = HomeTextMuted) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
-                            color = TextSecondary
-                        )
-                    }
-                }
-            }
-
-            IconButton(
-                onClick = onRefreshSessions,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Refresh session statuses",
-                    tint = TextMuted,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        if (uiState.sessions.isEmpty() && !uiState.isLoadingSessions) {
-            // Empty State Card
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(BikerCardBg)
-                    .border(1.dp, BikerBorder, RoundedCornerShape(22.dp))
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        modifier = Modifier
-                            .size(60.dp)
-                            .clip(CircleShape)
-                            .background(BikerSurfaceElevated),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.History,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(
-                        text = "No Saved Convoys",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Convoys you create or join will be saved here so you can quickly jump back into the action.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-        } else {
-            // Session Cards List
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                uiState.sessions.forEach { sessionUi ->
-                    SessionCard(
-                        sessionUi = sessionUi,
-                        isRejoining = uiState.rejoiningCode == sessionUi.rideCode,
-                        onRejoin = {
-                            if (!hasPermissions) {
-                                onRequestPermissions()
-                            } else {
-                                onRejoinRide(sessionUi.session)
+                            letterSpacing = 3.sp,
+                            fontSize = 18.sp,
+                            color = HomeTextPrimary
+                        ),
+                        trailingIcon = {
+                            // 1-Tap Paste Button from Clipboard
+                            IconButton(
+                                onClick = {
+                                    val clip = clipboardManager.getText()?.text?.trim()?.uppercase()
+                                    if (!clip.isNullOrEmpty()) {
+                                        onJoinCodeChange(clip)
+                                        Toast.makeText(context, "Pasted: $clip", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Clipboard empty", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentPaste,
+                                    contentDescription = "Paste ride code",
+                                    tint = ElectricAmber,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         },
-                        onDelete = {
-                            sessionToDelete = sessionUi
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Characters,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ElectricAmber,
+                            unfocusedBorderColor = HomeBorder,
+                            focusedLabelColor = ElectricAmber,
+                            unfocusedLabelColor = HomeTextSecondary,
+                            focusedTextColor = HomeTextPrimary,
+                            unfocusedTextColor = HomeTextPrimary,
+                            focusedContainerColor = HomeSurfaceElevated.copy(alpha = 0.5f),
+                            unfocusedContainerColor = HomeSurfaceElevated.copy(alpha = 0.25f),
+                            cursorColor = ElectricAmber
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    val isJoinButtonEnabled = !uiState.isCreatingRide && !uiState.isJoiningRide && uiState.rejoiningCode == null
+                    Button(
+                        onClick = {
+                            if (!hasPermissions) {
+                                onRequestPermissions()
+                                return@Button
+                            }
+                            focusManager.clearFocus()
+                            onJoinRide()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (uiState.joinCode.isNotBlank()) ElectricAmber else HomeSurfaceElevated,
+                            disabledContainerColor = HomeSurfaceElevated.copy(alpha = 0.5f)
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            if (uiState.joinCode.isNotBlank()) ElectricAmber else HomeBorder
+                        ),
+                        enabled = isJoinButtonEnabled
+                    ) {
+                        if (uiState.isJoiningRide) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color = if (uiState.joinCode.isNotBlank()) HomeDarkBg else ElectricAmber,
+                                strokeWidth = 2.5.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = if (uiState.joinCode.isNotBlank()) HomeDarkBg else HomeTextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Join Convoy",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (uiState.joinCode.isNotBlank()) HomeDarkBg else HomeTextSecondary
+                            )
                         }
+                    }
+                }
+            }
+
+            // Error message presentation
+            if (uiState.errorMessage != null) {
+                Spacer(modifier = Modifier.height(18.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(HomeStatusRed.copy(alpha = 0.14f))
+                        .border(1.dp, HomeStatusRed.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        text = uiState.errorMessage ?: "",
+                        color = HomeStatusRed,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(40.dp))
-    }
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // -------------------------------------------------------------
+            // 8. "Recent Convoys" section header with refresh icon,
+            //    showing list of session cards or empty state
+            // -------------------------------------------------------------
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "RECENT CONVOYS",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = HomeTextMuted,
+                        letterSpacing = 1.5.sp
+                    )
+                    if (uiState.sessions.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(HomeSurfaceElevated)
+                                .border(1.dp, HomeBorder, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "${uiState.sessions.size}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ElectricAmber
+                            )
+                        }
+                    }
+                }
+
+                IconButton(
+                    onClick = onRefreshSessions,
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Refresh session statuses",
+                        tint = if (uiState.isLoadingSessions) ElectricAmber else HomeTextMuted,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (uiState.sessions.isEmpty() && !uiState.isLoadingSessions) {
+                // Empty State Card
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(HomeCardBg)
+                        .border(1.dp, HomeBorder, RoundedCornerShape(20.dp))
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(CircleShape)
+                                .background(HomeSurfaceElevated)
+                                .border(1.dp, HomeBorder, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.History,
+                                contentDescription = null,
+                                tint = HomeTextMuted,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            text = "No Saved Convoys",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = HomeTextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Convoys you create or join will be saved here so you can quickly jump back into the action.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = HomeTextSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+            } else {
+                // Session Cards List
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    uiState.sessions.forEach { sessionUi ->
+                        SessionCard(
+                            sessionUi = sessionUi,
+                            isRejoining = uiState.rejoiningCode == sessionUi.rideCode,
+                            onRejoin = {
+                                if (!hasPermissions) {
+                                    onRequestPermissions()
+                                } else {
+                                    onRejoinRide(sessionUi.session)
+                                }
+                            },
+                            onDelete = {
+                                sessionToDelete = sessionUi
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(48.dp))
+        }
 
         // Full-page Uber-style Plan Trip Screen
         AnimatedVisibility(
@@ -987,12 +1108,12 @@ private fun SessionCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(BikerCardBg)
+            .clip(RoundedCornerShape(20.dp))
+            .background(HomeCardBg)
             .border(
                 width = 1.dp,
-                color = if (sessionUi.isActive) StatusGreen.copy(alpha = 0.45f) else BikerBorder,
-                shape = RoundedCornerShape(22.dp)
+                brush = if (sessionUi.isActive) ActiveRideBorderBrush else Brush.linearGradient(listOf(HomeBorder, HomeBorder)),
+                shape = RoundedCornerShape(20.dp)
             )
             .padding(18.dp)
     ) {
@@ -1005,11 +1126,11 @@ private fun SessionCard(
                 // Large readable Ride Code for bikers
                 Text(
                     text = sessionUi.rideCode,
-                    fontSize = 24.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 2.5.sp,
-                    color = TextPrimary
+                    color = HomeTextPrimary
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -1025,7 +1146,7 @@ private fun SessionCard(
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
                         contentDescription = "Copy code",
-                        tint = BikerAmber,
+                        tint = ElectricAmber,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -1043,13 +1164,13 @@ private fun SessionCard(
                 Text(
                     text = formatSessionTime(sessionUi.timestamp, sessionUi.isHost),
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
+                    color = HomeTextSecondary
                 )
                 if (sessionUi.riderName.isNotBlank()) {
                     Text(
                         text = " • as ${sessionUi.riderName}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextMuted
+                        color = HomeTextMuted
                     )
                 }
             }
@@ -1068,24 +1189,24 @@ private fun SessionCard(
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (sessionUi.isActive) BikerAmber else BikerSurfaceElevated
+                        containerColor = if (sessionUi.isActive) ElectricAmber else HomeSurfaceElevated
                     ),
-                    border = if (sessionUi.isActive) null else androidx.compose.foundation.BorderStroke(1.dp, BikerBorder),
+                    border = if (sessionUi.isActive) null else BorderStroke(1.dp, HomeBorder),
                     enabled = !isRejoining
                 ) {
                     if (isRejoining) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
-                            color = if (sessionUi.isActive) BikerDarkBg else BikerAmber,
+                            color = if (sessionUi.isActive) HomeDarkBg else ElectricAmber,
                             strokeWidth = 2.dp
                         )
                     } else {
                         Icon(
                             imageVector = if (sessionUi.isActive) Icons.AutoMirrored.Filled.ArrowForward else Icons.Default.Refresh,
                             contentDescription = null,
-                            tint = if (sessionUi.isActive) BikerDarkBg else TextPrimary,
+                            tint = if (sessionUi.isActive) HomeDarkBg else HomeTextPrimary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -1093,7 +1214,7 @@ private fun SessionCard(
                             text = if (sessionUi.isActive) "Join Convoy" else "Rejoin",
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
-                            color = if (sessionUi.isActive) BikerDarkBg else TextPrimary
+                            color = if (sessionUi.isActive) HomeDarkBg else HomeTextPrimary
                         )
                     }
                 }
@@ -1103,14 +1224,14 @@ private fun SessionCard(
                     onClick = onDelete,
                     modifier = Modifier
                         .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(BikerSurfaceElevated)
-                        .border(1.dp, BikerBorder, RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(HomeSurfaceElevated)
+                        .border(1.dp, HomeBorder, RoundedCornerShape(14.dp))
                 ) {
                     Icon(
                         imageVector = Icons.Default.DeleteOutline,
                         contentDescription = "Delete session locally",
-                        tint = StatusRed.copy(alpha = 0.85f),
+                        tint = HomeStatusRed.copy(alpha = 0.85f),
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -1124,10 +1245,10 @@ private fun SessionCard(
  */
 @Composable
 private fun SessionStatusBadge(isActive: Boolean) {
-    val bgColor = if (isActive) StatusGreen.copy(alpha = 0.14f) else BikerSurfaceElevated
-    val borderColor = if (isActive) StatusGreen.copy(alpha = 0.5f) else BikerBorder
-    val dotColor = if (isActive) StatusGreen else TextMuted
-    val textColor = if (isActive) StatusGreen else TextMuted
+    val bgColor = if (isActive) HomeStatusGreen.copy(alpha = 0.15f) else HomeSurfaceElevated
+    val borderColor = if (isActive) HomeStatusGreen.copy(alpha = 0.45f) else HomeBorder
+    val dotColor = if (isActive) HomeStatusGreen else HomeTextMuted
+    val textColor = if (isActive) HomeStatusGreen else HomeTextMuted
     val label = if (isActive) "LIVE NOW" else "ENDED"
 
     Box(
@@ -1149,7 +1270,7 @@ private fun SessionStatusBadge(isActive: Boolean) {
                 text = label,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 0.5.sp,
+                letterSpacing = 0.6.sp,
                 color = textColor
             )
         }
@@ -1172,7 +1293,7 @@ private fun formatSessionTime(timestamp: Long, isHost: Boolean): String {
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF101216)
+@Preview(showBackground = true, backgroundColor = 0xFF090B0E)
 @Composable
 fun HomeScreenPreview() {
     RideSafeTheme {

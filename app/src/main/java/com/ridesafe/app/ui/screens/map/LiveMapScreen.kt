@@ -29,6 +29,8 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,7 +40,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -53,7 +64,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,6 +88,7 @@ import androidx.compose.material.icons.filled.Navigation
 import com.google.android.gms.location.LocationServices
 import com.ridesafe.app.ui.theme.RideSafeTheme
 import com.ridesafe.app.data.model.RiderStatus
+import com.ridesafe.app.ui.theme.BikerAmber
 import com.ridesafe.app.ui.theme.BikerBorder
 import com.ridesafe.app.ui.theme.BikerCardBg
 import com.ridesafe.app.ui.theme.BikerDarkBg
@@ -97,16 +111,95 @@ import org.osmdroid.views.overlay.Marker as OsmMarker
 import org.osmdroid.views.overlay.Polyline as OsmPolyline
 
 /**
+ * Creates a glowing amber circular badge for the current user ("You").
+ * Matches the premium dark cockpit amber theme with concentric glow rings,
+ * electric amber border, status emoji, "YOU" condensed label, and an amber pointer pin.
+ */
+private fun createCurrentUserMarkerBitmap(status: RiderStatus): Bitmap {
+    val diameter = 90f
+    val pointerHeight = 18f
+    val totalHeight = diameter + pointerHeight
+    val totalWidth = diameter
+
+    val bitmap = Bitmap.createBitmap(totalWidth.toInt(), totalHeight.toInt(), Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    val centerX = totalWidth / 2f
+    val centerY = diameter / 2f
+
+    // 1. Soft outer amber glow
+    val outerGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#26FFB300")
+        style = Paint.Style.FILL
+    }
+    canvas.drawCircle(centerX, centerY, 44f, outerGlowPaint)
+
+    // 2. Middle amber glow ring
+    val midGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#4DFFB300")
+        style = Paint.Style.FILL
+    }
+    canvas.drawCircle(centerX, centerY, 38f, midGlowPaint)
+
+    // 3. Dark glassmorphic badge center
+    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#14171E")
+        style = Paint.Style.FILL
+    }
+    canvas.drawCircle(centerX, centerY, 32f, bgPaint)
+
+    // 4. Solid electric amber circular border
+    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#FFB300")
+        style = Paint.Style.STROKE
+        strokeWidth = 4.5f
+    }
+    canvas.drawCircle(centerX, centerY, 32f, strokePaint)
+
+    // 5. Inverted pointer pin pointing to exact GPS coordinate
+    val pointerPath = Path().apply {
+        moveTo(centerX - 8f, centerY + 28f)
+        lineTo(centerX + 8f, centerY + 28f)
+        lineTo(centerX, totalHeight - 2f)
+        close()
+    }
+    val pointerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#FFB300")
+        style = Paint.Style.FILL
+    }
+    canvas.drawPath(pointerPath, pointerPaint)
+
+    // 6. Draw Status emoji at center
+    val emojiPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 26f
+        textAlign = Paint.Align.CENTER
+    }
+    val emojiBaseline = centerY - 4f - ((emojiPaint.descent() + emojiPaint.ascent()) / 2f)
+    canvas.drawText(status.emoji, centerX, emojiBaseline, emojiPaint)
+
+    // 7. Draw "YOU" condensed label
+    val youTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 13f
+        color = android.graphics.Color.parseColor("#FFB300")
+        typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
+    canvas.drawText("YOU", centerX, centerY + 20f, youTextPaint)
+
+    return bitmap
+}
+
+/**
  * Creates a custom map pin bitmap with the rider's name and status emoji.
  * Displays e.g. "🏍️ Rahul (You)" or "⛽ Sahil" inside a sleek rounded pill
  * with an inverted pointer triangle pointing to the GPS coordinate.
  */
 private fun createRiderMarkerBitmap(name: String, status: RiderStatus, isCurrentUser: Boolean): Bitmap {
-    val displayName = if (isCurrentUser) {
-        "${name.trim().ifEmpty { "You" }} (You)"
-    } else {
-        name.trim().ifEmpty { "Rider" }
+    if (isCurrentUser) {
+        return createCurrentUserMarkerBitmap(status)
     }
+
+    val displayName = name.trim().ifEmpty { "Rider" }
 
     val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = 34f
@@ -324,6 +417,7 @@ fun LiveMapScreen(
     // Hold a reference to the osmdroid MapView so we can control it from Compose callbacks
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var hasCenteredInitialLocation by remember { mutableStateOf(false) }
+    var isRouteVisible by remember { mutableStateOf(true) }
 
     // Configure osmdroid ONCE before the MapView is created.
     // This sets the User-Agent (required by OpenStreetMap tile servers) and
@@ -432,8 +526,8 @@ fun LiveMapScreen(
                 mv.overlays.clear()
                 android.util.Log.d("RideSafeDebug", "[MapRender] Updating map overlays for ${riders.size} riders, routePoints=${routePoints.size}:")
 
-                // 1. Draw planned route polyline if present (drawn UNDER markers)
-                if (routePoints.isNotEmpty()) {
+                // 1. Draw planned route polyline if present and visible (drawn UNDER markers)
+                if (routePoints.isNotEmpty() && isRouteVisible) {
                     val routePolyline = OsmPolyline(mv).apply {
                         setPoints(routePoints)
                         outlinePaint.apply {
@@ -452,8 +546,8 @@ fun LiveMapScreen(
                     mv.overlays.add(routePolyline)
                 }
 
-                // 2. Add Start point marker if trip planned
-                if (tripInfo != null && tripInfo.isTripPlanned && tripInfo.startLat != 0.0 && tripInfo.startLng != 0.0) {
+                // 2. Add Start point marker if trip planned and visible
+                if (tripInfo != null && tripInfo.isTripPlanned && isRouteVisible && tripInfo.startLat != 0.0 && tripInfo.startLng != 0.0) {
                     val startPos = GeoPoint(tripInfo.startLat, tripInfo.startLng)
                     val startKey = "start_${tripInfo.startName}"
                     val startBitmap = markerBitmapCache.getOrPut(startKey) {
@@ -473,8 +567,8 @@ fun LiveMapScreen(
                     mv.overlays.add(startMarker)
                 }
 
-                // 3. Add Destination point marker if trip planned
-                if (tripInfo != null && tripInfo.isTripPlanned && tripInfo.destLat != 0.0 && tripInfo.destLng != 0.0) {
+                // 3. Add Destination point marker if trip planned and visible
+                if (tripInfo != null && tripInfo.isTripPlanned && isRouteVisible && tripInfo.destLat != 0.0 && tripInfo.destLng != 0.0) {
                     val destPos = GeoPoint(tripInfo.destLat, tripInfo.destLng)
                     val destKey = "dest_${tripInfo.destName}"
                     val destBitmap = markerBitmapCache.getOrPut(destKey) {
@@ -543,14 +637,15 @@ fun LiveMapScreen(
             }
         )
 
-        // 2. Top Header Panels: Ride Code + Trip Overview Banner + Emergency Alert
+        // 2. Top Header Panels: Ride Code + Horizontal Floating Trip Bar + Emergency Alert
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Top-left floating pill (Ride Code) + Top-right circular badges (Rider count & Leave)
             TopRideBar(
                 rideCode = uiState.rideCode,
                 riderCount = uiState.riders.size,
@@ -565,17 +660,18 @@ fun LiveMapScreen(
                 }
             )
 
-            // 2.2 Planned Route Overview Pill (appears when trip route is present)
-            if (tripInfo != null && tripInfo.isTripPlanned) {
-                TripOverviewBanner(
-                    tripInfo = tripInfo,
-                    onFitRouteClick = {
-                        zoomToFitContent(mapView, uiState.riders, uiState.routePoints, tripInfo)
+            // Horizontal floating bar: Route fork icon, destination name, distance · duration, and FIT ROUTE text link
+            TripOverviewBanner(
+                tripInfo = tripInfo,
+                onFitRouteClick = {
+                    if (tripInfo != null && tripInfo.isTripPlanned && uiState.routePoints.isNotEmpty()) {
+                        isRouteVisible = true
                     }
-                )
-            }
+                    zoomToFitContent(mapView, uiState.riders, uiState.routePoints, tripInfo)
+                }
+            )
 
-            // 2.5 Emergency Alert Banner: Displays when any other convoy rider sets status to EMERGENCY
+            // Emergency Alert Banner: Displays when any other convoy rider sets status to EMERGENCY
             val emergencyRiders = uiState.riders.filter { !it.isCurrentUser && it.rider.riderStatus == RiderStatus.EMERGENCY }
             if (emergencyRiders.isNotEmpty()) {
                 EmergencyAlertBanner(
@@ -591,8 +687,8 @@ fun LiveMapScreen(
             }
         }
 
-        // 3. Proximity Radar Box: Shows relative distance and ahead/behind status for all riders
-        RiderProximityBox(
+        // 3. Expandable Rider Radar Panel: shows relative distance and ahead/behind status for all riders
+        RiderRadarPanel(
             riders = uiState.riders,
             onRiderClick = { riderItem ->
                 val lat = riderItem.rider.lat
@@ -604,18 +700,28 @@ fun LiveMapScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, bottom = 86.dp)
+                .padding(start = 16.dp, end = 16.dp, bottom = 82.dp)
         )
 
-        // 4. Bottom Control Dock: Stop Status Button + Rider List + Fit Route + Recenter
+        // 4. Bottom Status Bar: Status Pill on left + Three circular icon buttons on right
         BottomControlDock(
             myStatus = uiState.myStatus,
-            riderCount = uiState.riders.size,
+            isRouteVisible = isRouteVisible,
             hasPlannedRoute = tripInfo != null && tripInfo.isTripPlanned,
             onStatusClick = { viewModel.openStatusPicker() },
             onRiderListClick = { viewModel.openRiderList() },
-            onFitRouteClick = {
-                zoomToFitContent(mapView, uiState.riders, uiState.routePoints, tripInfo)
+            onToggleRouteClick = {
+                if (tripInfo != null && tripInfo.isTripPlanned) {
+                    isRouteVisible = !isRouteVisible
+                    if (isRouteVisible) {
+                        zoomToFitContent(mapView, uiState.riders, uiState.routePoints, tripInfo)
+                        Toast.makeText(context, "Route visible", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Route hidden", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, "No route planned for this convoy", Toast.LENGTH_SHORT).show()
+                }
             },
             onRecenterClick = {
                 val lat = currentRider?.rider?.lat ?: 0.0
@@ -641,7 +747,7 @@ fun LiveMapScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 14.dp)
         )
 
         // 5. Stop Status Picker Modal
@@ -673,6 +779,11 @@ fun LiveMapScreen(
     }
 }
 
+/**
+ * Top floating header bar:
+ * - Top-left: Glassmorphic floating pill with "RIDE CODE" label, large bold amber code in condensed typography, and copy icon
+ * - Top-right: Circular rider-count badge (person icon + number) and circular exit/leave button with red-tinted outline
+ */
 @Composable
 private fun TopRideBar(
     rideCode: String,
@@ -681,81 +792,112 @@ private fun TopRideBar(
     onLeaveClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val condensedFont = remember {
+        FontFamily(Typeface.create("sans-serif-condensed", Typeface.BOLD))
+    }
+
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Ride Code Card
+        // 1. Top-left floating pill: "RIDE CODE" label above large bold amber code with copy icon
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(BikerCardBg.copy(alpha = 0.92f))
-                .border(1.dp, BikerBorder, RoundedCornerShape(16.dp))
+                .shadow(
+                    elevation = 8.dp,
+                    shape = RoundedCornerShape(22.dp),
+                    spotColor = BikerAmber.copy(alpha = 0.25f),
+                    ambientColor = Color.Black
+                )
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xEE14171E))
+                .border(1.dp, BikerAmber.copy(alpha = 0.35f), RoundedCornerShape(22.dp))
                 .clickable(onClick = onCopyCode)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
                 Text(
                     text = "RIDE CODE",
-                    fontSize = 10.sp,
+                    fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextMuted
+                    color = TextMuted,
+                    letterSpacing = 1.sp
                 )
                 Text(
-                    text = rideCode,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 1.sp
+                    text = rideCode.ifEmpty { "CREW47" },
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = condensedFont,
+                    color = BikerAmber,
+                    letterSpacing = 2.sp
                 )
             }
             Spacer(modifier = Modifier.width(10.dp))
             Icon(
                 imageVector = Icons.Default.ContentCopy,
-                contentDescription = "Copy code",
-                tint = TextSecondary,
+                contentDescription = "Copy ride code",
+                tint = BikerAmber.copy(alpha = 0.85f),
                 modifier = Modifier.size(16.dp)
             )
         }
 
-        // Right actions: Rider count badge & Leave button
+        // 2. Top-right: circular rider-count badge + circular exit/leave button
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Active riders badge
-            Row(
+            // Circular rider-count badge (person icon + number)
+            Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(BikerCardBg.copy(alpha = 0.92f))
-                    .border(1.dp, BikerBorder, RoundedCornerShape(16.dp))
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .height(44.dp)
+                    .defaultMinSize(minWidth = 44.dp)
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = CircleShape,
+                        spotColor = BikerAmber.copy(alpha = 0.2f),
+                        ambientColor = Color.Black
+                    )
+                    .clip(CircleShape)
+                    .background(Color(0xEE14171E))
+                    .border(1.dp, BikerAmber.copy(alpha = 0.35f), CircleShape)
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Group,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "$riderCount",
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                    fontSize = 14.sp
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Riders",
+                        tint = BikerAmber,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "$riderCount",
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        fontSize = 14.sp
+                    )
+                }
             }
 
-            // Leave Ride button
+            // Circular exit/leave icon button with a red-tinted outline
             Box(
                 modifier = Modifier
                     .size(44.dp)
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = CircleShape,
+                        spotColor = StatusRed.copy(alpha = 0.3f),
+                        ambientColor = Color.Black
+                    )
                     .clip(CircleShape)
-                    .background(BikerCardBg.copy(alpha = 0.92f))
-                    .border(1.dp, StatusRed.copy(alpha = 0.5f), CircleShape)
+                    .background(Color(0xEE14171E))
+                    .border(1.5.dp, StatusRed.copy(alpha = 0.65f), CircleShape)
                     .clickable(onClick = onLeaveClick),
                 contentAlignment = Alignment.Center
             ) {
@@ -772,7 +914,7 @@ private fun TopRideBar(
 
 /**
  * Emergency Alert Banner showing which rider needs immediate help and their distance,
- * with a quick LOCATE button to animate the map camera directly to them.
+ * styled in dark glassmorphism with vivid red pulse and quick locate action.
  */
 @Composable
 private fun EmergencyAlertBanner(
@@ -785,9 +927,16 @@ private fun EmergencyAlertBanner(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(StatusRed.copy(alpha = 0.22f))
-            .border(2.dp, StatusRed, RoundedCornerShape(16.dp))
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(18.dp),
+                spotColor = StatusRed.copy(alpha = 0.35f),
+                ambientColor = Color.Black
+            )
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xEE14171E))
+            .background(StatusRed.copy(alpha = 0.16f))
+            .border(1.5.dp, StatusRed, RoundedCornerShape(18.dp))
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Row(
@@ -842,138 +991,47 @@ private fun EmergencyAlertBanner(
     }
 }
 
-@Composable
-private fun BottomControlDock(
-    myStatus: RiderStatus,
-    riderCount: Int,
-    hasPlannedRoute: Boolean = false,
-    onStatusClick: () -> Unit,
-    onRiderListClick: () -> Unit,
-    onFitRouteClick: () -> Unit = {},
-    onRecenterClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Main Status Button (tap to change status)
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .clip(RoundedCornerShape(18.dp))
-                .background(BikerCardBg.copy(alpha = 0.95f))
-                .border(
-                    width = 2.dp,
-                    color = myStatus.color.copy(alpha = 0.8f),
-                    shape = RoundedCornerShape(18.dp)
-                )
-                .clickable(onClick = onStatusClick)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(myStatus.color.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = myStatus.emoji, fontSize = 16.sp)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = "MY STATUS",
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextMuted
-                )
-                Text(
-                    text = myStatus.displayName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = myStatus.color
-                )
-            }
-        }
-
-        // Rider List toggle button
-        Box(
-            modifier = Modifier
-                .size(54.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(BikerCardBg.copy(alpha = 0.95f))
-                .border(1.dp, BikerBorder, RoundedCornerShape(18.dp))
-                .clickable(onClick = onRiderListClick),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Group,
-                contentDescription = "Riders List",
-                tint = TextPrimary,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-
-        // Fit Route & Convoy button (visible when a route is planned)
-        if (hasPlannedRoute) {
-            Box(
-                modifier = Modifier
-                    .size(54.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(BikerCardBg.copy(alpha = 0.95f))
-                    .border(1.dp, StatusBlue.copy(alpha = 0.7f), RoundedCornerShape(18.dp))
-                    .clickable(onClick = onFitRouteClick),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.AltRoute,
-                    contentDescription = "Fit Route & Convoy",
-                    tint = StatusBlue,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
-
-        // Recenter button
-        Box(
-            modifier = Modifier
-                .size(54.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(BikerCardBg.copy(alpha = 0.95f))
-                .border(1.dp, BikerBorder, RoundedCornerShape(18.dp))
-                .clickable(onClick = onRecenterClick),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.MyLocation,
-                contentDescription = "Recenter",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-    }
-}
-
 /**
- * Floating banner displaying planned route summary (start -> destination, distance & duration).
- * Tapping it animates camera to fit both the entire route and convoy riders.
+ * Horizontal floating bar:
+ * - Route-fork icon
+ * - Destination name (truncated with ellipsis if long)
+ * - "distance · duration" in smaller text
+ * - "FIT ROUTE" text link in amber on the right
  */
 @Composable
 private fun TripOverviewBanner(
-    tripInfo: TripInfo,
+    tripInfo: TripInfo?,
     onFitRouteClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val destinationName = if (tripInfo != null && tripInfo.destName.isNotBlank()) {
+        tripInfo.destName
+    } else {
+        "Convoy Destination"
+    }
+
+    val distanceDurationText = if (tripInfo != null && tripInfo.formattedDistance.isNotBlank()) {
+        if (tripInfo.formattedDuration.isNotBlank()) {
+            "${tripInfo.formattedDistance} · ${tripInfo.formattedDuration}"
+        } else {
+            tripInfo.formattedDistance
+        }
+    } else {
+        "Route Navigation"
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(18.dp),
+                spotColor = BikerAmber.copy(alpha = 0.2f),
+                ambientColor = Color.Black
+            )
             .clip(RoundedCornerShape(18.dp))
-            .background(BikerCardBg.copy(alpha = 0.94f))
-            .border(1.dp, StatusBlue.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
-            .clickable(onClick = onFitRouteClick)
+            .background(Color(0xEE14171E))
+            .border(1.dp, BikerAmber.copy(alpha = 0.3f), RoundedCornerShape(18.dp))
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Row(
@@ -981,55 +1039,67 @@ private fun TripOverviewBanner(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            // Left & Middle: Route-fork icon + Destination name + Distance · Duration
             Row(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f, fill = false),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Route fork icon badge
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(34.dp)
                         .clip(CircleShape)
-                        .background(StatusBlue.copy(alpha = 0.2f)),
+                        .background(StatusBlue.copy(alpha = 0.15f))
+                        .border(1.dp, StatusBlue.copy(alpha = 0.35f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.AltRoute,
-                        contentDescription = null,
+                        contentDescription = "Route Fork",
                         tint = StatusBlue,
                         modifier = Modifier.size(18.dp)
                     )
                 }
+
                 Spacer(modifier = Modifier.width(10.dp))
-                Column {
+
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
-                        text = "${tripInfo.startName.ifEmpty { "Start" }} ➔ ${tripInfo.destName.ifEmpty { "Destination" }}",
-                        style = MaterialTheme.typography.labelMedium,
+                        text = destinationName,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
+                        fontSize = 14.sp,
                         maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "${tripInfo.formattedDistance} · ${tripInfo.formattedDuration} · Tap to fit view",
+                        text = distanceDurationText,
                         style = MaterialTheme.typography.bodySmall,
-                        color = StatusBlue,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 11.sp
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Right: "FIT ROUTE" text link in amber
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .background(BikerSurfaceElevated)
+                    .clickable(onClick = onFitRouteClick)
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
                 Text(
                     text = "FIT ROUTE",
-                    color = StatusBlue,
+                    color = BikerAmber,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 10.sp
+                    fontSize = 12.sp,
+                    letterSpacing = 0.8.sp
                 )
             }
         }
@@ -1037,11 +1107,13 @@ private fun TripOverviewBanner(
 }
 
 /**
- * RiderProximityBox displays a floating dashboard showing the relative position and distance
- * of all fellow group riders (e.g. "Rahul is 10 KM ahead of You", "Sahil is 5 KM behind you").
+ * Expandable "RIDER RADAR" panel:
+ * - Header row with pulse/radar icon, "RIDER RADAR" label, and rider-count pill, with chevron to expand/collapse
+ * - When empty: shows muted text "Waiting for other riders to join..."
+ * - When active: lists riders with distance, speed, and ahead/behind indicators
  */
 @Composable
-fun RiderProximityBox(
+fun RiderRadarPanel(
     riders: List<RiderWithDistance>,
     onRiderClick: (RiderWithDistance) -> Unit,
     modifier: Modifier = Modifier
@@ -1049,12 +1121,30 @@ fun RiderProximityBox(
     val fellowRiders = riders.filter { !it.isCurrentUser }
     var isExpanded by remember { mutableStateOf(true) }
 
+    // Pulsing animation for the radar icon to feel alive and responsive
+    val infiniteTransition = rememberInfiniteTransition(label = "RadarPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(BikerCardBg.copy(alpha = 0.94f))
-            .border(1.dp, BikerBorder, RoundedCornerShape(18.dp))
+            .shadow(
+                elevation = 10.dp,
+                shape = RoundedCornerShape(22.dp),
+                spotColor = BikerAmber.copy(alpha = 0.2f),
+                ambientColor = Color.Black
+            )
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color(0xEE14171E))
+            .border(1.dp, BikerAmber.copy(alpha = 0.28f), RoundedCornerShape(22.dp))
             .padding(14.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -1062,41 +1152,56 @@ fun RiderProximityBox(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { isExpanded = !isExpanded },
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { isExpanded = !isExpanded }
+                    .padding(vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Navigation,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    // Pulse / Radar icon
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(BikerAmber.copy(alpha = 0.2f * pulseAlpha)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Radar,
+                            contentDescription = "Radar",
+                            tint = BikerAmber,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "RIDER RADAR",
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextMuted,
-                        letterSpacing = 1.sp
+                        fontWeight = FontWeight.ExtraBold,
+                        color = TextPrimary,
+                        letterSpacing = 1.2.sp
                     )
                     Spacer(modifier = Modifier.width(8.dp))
+                    // Rider-count pill
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(BikerAmber.copy(alpha = 0.15f))
+                            .border(1.dp, BikerAmber.copy(alpha = 0.35f), RoundedCornerShape(percent = 50))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = "${fellowRiders.size} ${if (fellowRiders.size == 1) "RIDER" else "RIDERS"}",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
+                            color = BikerAmber,
+                            letterSpacing = 0.5.sp
                         )
                     }
                 }
 
+                // Chevron to expand/collapse
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
@@ -1111,14 +1216,9 @@ fun RiderProximityBox(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "🏍️",
-                                fontSize = 16.sp
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Waiting for other riders to join...",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -1135,8 +1235,9 @@ fun RiderProximityBox(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(BikerSurfaceElevated)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(BikerSurfaceElevated.copy(alpha = 0.7f))
+                                        .border(1.dp, BikerBorder.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
                                         .clickable { onRiderClick(item) }
                                         .padding(horizontal = 12.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -1148,13 +1249,13 @@ fun RiderProximityBox(
                                                 modifier = Modifier
                                                     .size(26.dp)
                                                     .clip(CircleShape)
-                                                    .background(androidx.compose.ui.graphics.Color(0xFF1B5E20)),
+                                                    .background(Color(0xFF1B5E20)),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.ArrowUpward,
                                                     contentDescription = "Ahead",
-                                                    tint = androidx.compose.ui.graphics.Color.White,
+                                                    tint = Color.White,
                                                     modifier = Modifier.size(15.dp)
                                                 )
                                             }
@@ -1164,13 +1265,13 @@ fun RiderProximityBox(
                                                 modifier = Modifier
                                                     .size(26.dp)
                                                     .clip(CircleShape)
-                                                    .background(androidx.compose.ui.graphics.Color(0xFFE65100)),
+                                                    .background(Color(0xFFE65100)),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.ArrowDownward,
                                                     contentDescription = "Behind",
-                                                    tint = androidx.compose.ui.graphics.Color.White,
+                                                    tint = Color.White,
                                                     modifier = Modifier.size(15.dp)
                                                 )
                                             }
@@ -1185,7 +1286,6 @@ fun RiderProximityBox(
 
                                     Spacer(modifier = Modifier.width(10.dp))
 
-                                    // Display the exact requested string e.g. "Rahul is 10 KM ahead of You"
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = item.relativePositionText,
@@ -1204,7 +1304,6 @@ fun RiderProximityBox(
                                         }
                                     }
 
-                                    // Status Emoji
                                     Text(
                                         text = item.rider.riderStatus.emoji,
                                         fontSize = 18.sp
@@ -1219,13 +1318,179 @@ fun RiderProximityBox(
     }
 }
 
+/**
+ * Backward-compatible alias for RiderRadarPanel
+ */
+@Composable
+fun RiderProximityBox(
+    riders: List<RiderWithDistance>,
+    onRiderClick: (RiderWithDistance) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    RiderRadarPanel(riders = riders, onRiderClick = onRiderClick, modifier = modifier)
+}
+
+/**
+ * Bottom status bar:
+ * - "MY STATUS" pill on the left showing current status (e.g. green-outlined "Riding")
+ * - Three circular icon buttons on the right: rider list, route toggle, recenter-on-me
+ */
+@Composable
+private fun BottomControlDock(
+    myStatus: RiderStatus,
+    isRouteVisible: Boolean,
+    hasPlannedRoute: Boolean,
+    onStatusClick: () -> Unit,
+    onRiderListClick: () -> Unit,
+    onToggleRouteClick: () -> Unit,
+    onRecenterClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // "MY STATUS" pill on the left (e.g. green-outlined "Riding")
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .height(52.dp)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = RoundedCornerShape(percent = 50),
+                    spotColor = myStatus.color.copy(alpha = 0.35f),
+                    ambientColor = Color.Black
+                )
+                .clip(RoundedCornerShape(percent = 50))
+                .background(Color(0xEE14171E))
+                .border(
+                    width = 1.5.dp,
+                    color = myStatus.color.copy(alpha = 0.85f),
+                    shape = RoundedCornerShape(percent = 50)
+                )
+                .clickable(onClick = onStatusClick)
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(myStatus.color.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = myStatus.emoji, fontSize = 16.sp)
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                Text(
+                    text = "MY STATUS",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMuted,
+                    letterSpacing = 0.8.sp
+                )
+                Text(
+                    text = myStatus.displayName,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = myStatus.color,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // Three circular icon buttons on the right:
+        // 1. Rider list button
+        Box(
+            modifier = Modifier
+                .size(50.dp)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = CircleShape,
+                    spotColor = BikerAmber.copy(alpha = 0.2f),
+                    ambientColor = Color.Black
+                )
+                .clip(CircleShape)
+                .background(Color(0xEE14171E))
+                .border(1.dp, BikerAmber.copy(alpha = 0.35f), CircleShape)
+                .clickable(onClick = onRiderListClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Group,
+                contentDescription = "Riders List",
+                tint = TextPrimary,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+
+        // 2. Route toggle button
+        val isRouteActive = hasPlannedRoute && isRouteVisible
+        val routeBorderColor = if (isRouteActive) StatusBlue.copy(alpha = 0.85f) else BikerBorder
+        val routeIconColor = if (isRouteActive) StatusBlue else TextMuted
+        val routeBgTint = if (isRouteActive) StatusBlue.copy(alpha = 0.14f) else Color.Transparent
+
+        Box(
+            modifier = Modifier
+                .size(50.dp)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = CircleShape,
+                    spotColor = if (isRouteActive) StatusBlue.copy(alpha = 0.3f) else Color.Transparent,
+                    ambientColor = Color.Black
+                )
+                .clip(CircleShape)
+                .background(Color(0xEE14171E))
+                .background(routeBgTint)
+                .border(1.dp, routeBorderColor, CircleShape)
+                .clickable(onClick = onToggleRouteClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.AltRoute,
+                contentDescription = "Toggle Route",
+                tint = routeIconColor,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+
+        // 3. Recenter-on-me button
+        Box(
+            modifier = Modifier
+                .size(50.dp)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = CircleShape,
+                    spotColor = BikerAmber.copy(alpha = 0.35f),
+                    ambientColor = Color.Black
+                )
+                .clip(CircleShape)
+                .background(Color(0xEE14171E))
+                .background(BikerAmber.copy(alpha = 0.08f))
+                .border(1.5.dp, BikerAmber.copy(alpha = 0.6f), CircleShape)
+                .clickable(onClick = onRecenterClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.MyLocation,
+                contentDescription = "Recenter on Me",
+                tint = BikerAmber,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true, backgroundColor = 0xFF101216)
 @Composable
 fun TopRideBarPreview() {
     RideSafeTheme {
         Box(modifier = Modifier.padding(16.dp)) {
             TopRideBar(
-                rideCode = "MOTO84",
+                rideCode = "CREW47",
                 riderCount = 5,
                 onCopyCode = {},
                 onLeaveClick = {}
@@ -1241,9 +1506,11 @@ fun BottomControlDockPreview() {
         Box(modifier = Modifier.padding(16.dp)) {
             BottomControlDock(
                 myStatus = RiderStatus.RIDING,
-                riderCount = 4,
+                isRouteVisible = true,
+                hasPlannedRoute = true,
                 onStatusClick = {},
                 onRiderListClick = {},
+                onToggleRouteClick = {},
                 onRecenterClick = {}
             )
         }
