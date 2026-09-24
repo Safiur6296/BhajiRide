@@ -124,8 +124,9 @@ class MapViewModel(
         observeRiders()
 
         // Start listening to planned trip route from Firebase
-        observeTripInfo()
+        observeTripInfo(cleanCode)
     }
+
 
     private fun startLocationTracking() {
         val app = getApplication<Application>()
@@ -239,9 +240,10 @@ class MapViewModel(
         }
     }
 
-    private fun observeTripInfo() {
+    private fun observeTripInfo(codeToObserve: String? = null) {
         tripObservationJob?.cancel()
-        val rideCode = _uiState.value.rideCode
+        val rideCode = (codeToObserve ?: _uiState.value.rideCode).trim().uppercase()
+        if (rideCode.isEmpty()) return
 
         tripObservationJob = viewModelScope.launch {
             repository.observeTripInfo(rideCode)
@@ -250,13 +252,20 @@ class MapViewModel(
                 }
                 .collect { trip ->
                     val points = if (trip != null && trip.isTripPlanned) {
-                        PolylineUtils.decodeGeometry(trip.routeGeometry)
+                        val decoded = PolylineUtils.decodeGeometry(trip.effectiveGeometry)
+                        if (decoded.isEmpty() && trip.startLat != 0.0 && trip.destLat != 0.0) {
+                            listOf(trip.startGeoPoint, trip.destGeoPoint)
+                        } else {
+                            decoded
+                        }
+                    } else if (trip != null && trip.effectiveGeometry.isNotBlank()) {
+                        PolylineUtils.decodeGeometry(trip.effectiveGeometry)
                     } else {
                         emptyList()
                     }
                     Log.d(
                         "RideSafeDebug",
-                        "[MapViewModel] Loaded tripInfo: start='${trip?.startName}', dest='${trip?.destName}', points=${points.size}"
+                        "[MapViewModel] Loaded tripInfo: start='${trip?.startName}', dest='${trip?.destName}', points=${points.size}, isTripPlanned=${trip?.isTripPlanned}"
                     )
                     _uiState.update {
                         it.copy(
@@ -267,6 +276,7 @@ class MapViewModel(
                 }
         }
     }
+
 
     private fun updateRidersWithLocalLocation() {
         val myId = _uiState.value.currentRiderId

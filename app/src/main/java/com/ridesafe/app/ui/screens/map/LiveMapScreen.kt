@@ -389,9 +389,24 @@ private fun zoomToFitContent(
 
     val boundingBox = PolylineUtils.calculateRouteBoundingBox(routePoints, additionalPoints)
     if (boundingBox != null) {
-        mv.zoomToBoundingBox(boundingBox, true, 130)
+        if (mv.width == 0 || mv.height == 0) {
+            mv.post {
+                try {
+                    mv.zoomToBoundingBox(boundingBox, true, 130)
+                } catch (e: Exception) {
+                    mv.controller?.setCenter(boundingBox.centerWithDateLine)
+                }
+            }
+        } else {
+            try {
+                mv.zoomToBoundingBox(boundingBox, true, 130)
+            } catch (e: Exception) {
+                mv.controller?.setCenter(boundingBox.centerWithDateLine)
+            }
+        }
     }
 }
+
 
 /**
  * LiveMapScreen is the main in-ride dashboard.
@@ -456,13 +471,14 @@ fun LiveMapScreen(
         }
     }
 
-    // Automatically zoom to fit route when route points load
-    LaunchedEffect(uiState.routePoints.size) {
-        if (uiState.routePoints.isNotEmpty()) {
+    // Automatically zoom to fit route when route points load or map becomes ready
+    LaunchedEffect(mapView, uiState.routePoints) {
+        if (mapView != null && uiState.routePoints.isNotEmpty()) {
             zoomToFitContent(mapView, uiState.riders, uiState.routePoints, uiState.tripInfo)
             hasCenteredInitialLocation = true
         }
     }
+
 
     // Also update camera when current rider GPS coordinates arrive from Firebase or local sensor
     val currentRider = uiState.riders.find { it.isCurrentUser }
@@ -661,15 +677,15 @@ fun LiveMapScreen(
             )
 
             // Horizontal floating bar: Route fork icon, destination name, distance · duration, and FIT ROUTE text link
-            TripOverviewBanner(
-                tripInfo = tripInfo,
-                onFitRouteClick = {
-                    if (tripInfo != null && tripInfo.isTripPlanned && uiState.routePoints.isNotEmpty()) {
+            if (tripInfo != null && tripInfo.isTripPlanned) {
+                TripOverviewBanner(
+                    tripInfo = tripInfo,
+                    onFitRouteClick = {
                         isRouteVisible = true
+                        zoomToFitContent(mapView, uiState.riders, uiState.routePoints, tripInfo)
                     }
-                    zoomToFitContent(mapView, uiState.riders, uiState.routePoints, tripInfo)
-                }
-            )
+                )
+            }
 
             // Emergency Alert Banner: Displays when any other convoy rider sets status to EMERGENCY
             val emergencyRiders = uiState.riders.filter { !it.isCurrentUser && it.rider.riderStatus == RiderStatus.EMERGENCY }

@@ -99,7 +99,7 @@ object PolylineUtils {
      * or a GeoJSON coordinate array/object.
      */
     fun decodeGeometry(geometry: String): List<GeoPoint> {
-        val trimmed = geometry.trim()
+        val trimmed = geometry.trim().removeSurrounding("\"").removeSurrounding("'").trim()
         if (trimmed.isEmpty()) return emptyList()
 
         // Check if it's JSON formatted
@@ -130,9 +130,15 @@ object PolylineUtils {
             }
         }
 
-        // Standard polyline decode
-        return decodePolyline(trimmed)
+        // Standard polyline decode with unescaped backslashes if any
+        val unescaped = if (trimmed.contains("\\\\")) trimmed.replace("\\\\", "\\") else trimmed
+        return try {
+            decodePolyline(unescaped)
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
+
 
     /**
      * Formats distance in meters into human-readable string (e.g. "850 m" or "45.2 km").

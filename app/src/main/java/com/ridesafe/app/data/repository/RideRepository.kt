@@ -115,6 +115,18 @@ class RideRepository {
 
             // Write planned route (tripInfo) if provided
             if (tripInfo != null && tripInfo.isTripPlanned) {
+                // Ensure both schemas are populated
+                val poly = tripInfo.effectiveGeometry
+                tripInfo.routeGeometry = poly
+                tripInfo.encodedPolyline = poly
+                if (tripInfo.distanceKm == 0.0 && tripInfo.distanceMeters > 0.0) {
+                    tripInfo.distanceKm = tripInfo.distanceMeters / 1000.0
+                }
+                if (tripInfo.durationMin == 0.0 && tripInfo.durationSeconds > 0.0) {
+                    tripInfo.durationMin = tripInfo.durationSeconds / 60.0
+                }
+                tripInfo.hasPlannedTrip = true
+
                 sessionRef.child("tripInfo").setValue(tripInfo)
                     .addOnSuccessListener { Log.d("RideSafeDebug", "[FirebaseWrite] createRide tripInfo write SUCCESS: code=$rideCode, start=${tripInfo.startName}, dest=${tripInfo.destName}") }
                     .addOnFailureListener { e -> Log.e("RideSafeDebug", "[FirebaseWrite] createRide tripInfo write FAILED: ${e.message}", e) }
@@ -133,15 +145,19 @@ class RideRepository {
     fun observeTripInfo(rideCode: String): Flow<TripInfo?> = callbackFlow {
         val cleanCode = rideCode.trim().uppercase()
         val tripRef = ridesRef.child(cleanCode).child("tripInfo")
+        tripRef.keepSynced(true)
 
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val trip = if (snapshot.exists()) {
-                    snapshot.getValue(TripInfo::class.java)
+                    parseTripInfoSnapshot(snapshot, cleanCode)
                 } else {
                     null
                 }
-                Log.d("RideSafeDebug", "[FirebaseObserve] onDataChange tripInfo: $trip for $cleanCode")
+                Log.d(
+                    "RideSafeDebug",
+                    "[FirebaseObserve] onDataChange tripInfo: $trip for $cleanCode (effectiveGeometry length=${trip?.effectiveGeometry?.length ?: 0}, isPlanned=${trip?.isTripPlanned})"
+                )
                 trySend(trip)
             }
 
@@ -157,10 +173,105 @@ class RideRepository {
     }
 
     /**
+     * Parses a Firebase DataSnapshot into a TripInfo instance, resilient to differences
+     * between Android schema (routeGeometry, distanceMeters) and Web schema (encodedPolyline, distanceKm).
+     */
+    fun parseTripInfoSnapshot(snapshot: DataSnapshot, cleanCode: String): TripInfo? {
+        if (!snapshot.exists()) return null
+
+        var trip: TripInfo? = null
+        try {
+            trip = snapshot.getValue(TripInfo::class.java)
+        } catch (e: Exception) {
+            Log.w("RideSafeDebug", "TripInfo reflection parse error: ${e.message}")
+        }
+
+        if (trip == null) {
+            trip = TripInfo()
+        }
+
+        // Resilient fallback: read geometry fields if missing in parsed bean
+        val encodedPoly = snapshot.child("encodedPolyline").getValue(String::class.java)
+            ?: snapshot.child("routeGeometry").getValue(String::class.java)
+            ?: snapshot.child("geometry").getValue(String::class.java)
+            ?: ""
+
+        if (trip.encodedPolyline.isBlank() && encodedPoly.isNotBlank()) {
+            trip.encodedPolyline = encodedPoly
+        }
+        if (trip.routeGeometry.isBlank() && encodedPoly.isNotBlank()) {
+            trip.routeGeometry = encodedPoly
+        }
+
+        val startName = snapshot.child("startName").getValue(String::class.java)
+        if (trip.startName.isBlank() && !startName.isNullOrBlank()) {
+            trip.startName = startName
+        }
+
+        val destName = snapshot.child("destName").getValue(String::class.java)
+        if (trip.destName.isBlank() && !destName.isNullOrBlank()) {
+            trip.destName = destName
+        }
+
+        if (trip.startLat == 0.0) {
+            trip.startLat = getDoubleValue(snapshot.child("startLat"))
+        }
+        if (trip.startLng == 0.0) {
+            trip.startLng = getDoubleValue(snapshot.child("startLng"))
+        }
+        if (trip.destLat == 0.0) {
+            trip.destLat = getDoubleValue(snapshot.child("destLat"))
+        }
+        if (trip.destLng == 0.0) {
+            trip.destLng = getDoubleValue(snapshot.child("destLng"))
+        }
+
+        if (trip.distanceMeters == 0.0) {
+            trip.distanceMeters = getDoubleValue(snapshot.child("distanceMeters"))
+        }
+        if (trip.distanceKm == 0.0) {
+            trip.distanceKm = getDoubleValue(snapshot.child("distanceKm"))
+        }
+        if (trip.durationSeconds == 0.0) {
+            trip.durationSeconds = getDoubleValue(snapshot.child("durationSeconds"))
+        }
+        if (trip.durationMin == 0.0) {
+            trip.durationMin = getDoubleValue(snapshot.child("durationMin"))
+        }
+
+        val plannedVal = snapshot.child("isTripPlanned").getValue(Boolean::class.java)
+        if (plannedVal == true || trip.effectiveGeometry.isNotBlank()) {
+            trip.isTripPlanned = true
+        }
+
+        return trip
+    }
+
+    private fun getDoubleValue(snapshot: DataSnapshot): Double {
+        if (!snapshot.exists()) return 0.0
+        val value = snapshot.value ?: return 0.0
+        return when (value) {
+            is Number -> value.toDouble()
+            is String -> value.toDoubleOrNull() ?: 0.0
+            else -> 0.0
+        }
+    }
+
+    /**
      * Updates or sets tripInfo on an existing ride session.
      */
     fun saveTripInfo(rideCode: String, tripInfo: TripInfo) {
         val cleanCode = rideCode.trim().uppercase()
+        val poly = tripInfo.effectiveGeometry
+        tripInfo.routeGeometry = poly
+        tripInfo.encodedPolyline = poly
+        if (tripInfo.distanceKm == 0.0 && tripInfo.distanceMeters > 0.0) {
+            tripInfo.distanceKm = tripInfo.distanceMeters / 1000.0
+        }
+        if (tripInfo.durationMin == 0.0 && tripInfo.durationSeconds > 0.0) {
+            tripInfo.durationMin = tripInfo.durationSeconds / 60.0
+        }
+        tripInfo.hasPlannedTrip = true
         ridesRef.child(cleanCode).child("tripInfo").setValue(tripInfo)
     }
 

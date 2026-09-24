@@ -410,6 +410,10 @@ class HomeViewModel(
             return
         }
 
+        val distanceMeters = route?.distanceMeters ?: 0.0
+        val durationSeconds = route?.durationSeconds ?: 0.0
+        val polyline = route?.encodedPolyline ?: ""
+
         val tripInfo = TripInfo(
             startName = start.name,
             startLat = start.lat,
@@ -417,14 +421,19 @@ class HomeViewModel(
             destName = dest.name,
             destLat = dest.lat,
             destLng = dest.lng,
-            routeGeometry = route?.encodedPolyline ?: "",
-            distanceMeters = route?.distanceMeters ?: 0.0,
-            durationSeconds = route?.durationSeconds ?: 0.0,
+            routeGeometry = polyline,
+            encodedPolyline = polyline,
+            distanceMeters = distanceMeters,
+            durationSeconds = durationSeconds,
+            distanceKm = if (distanceMeters > 0.0) distanceMeters / 1000.0 else 0.0,
+            durationMin = if (durationSeconds > 0.0) durationSeconds / 60.0 else 0.0,
+            hasPlannedTrip = true,
             createdAt = System.currentTimeMillis()
         )
 
         createRide(context, tripInfo, onRideJoined)
     }
+
 
     fun createRide(
         context: Context,

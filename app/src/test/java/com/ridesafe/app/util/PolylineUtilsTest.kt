@@ -81,6 +81,40 @@ class PolylineUtilsTest {
     }
 
     @Test
+    fun testWebTripInfoCompatibility() {
+        // Simulates tripInfo created on the Web app
+        val webTrip = TripInfo(
+            startName = "India Gate",
+            destName = "Red Fort",
+            startLat = 28.6129,
+            startLng = 77.2295,
+            destLat = 28.6562,
+            destLng = 77.2410,
+            encodedPolyline = "ifp_Ic_vpA??ZEA_@?GGyBCeAEaBAOAW?YAGEoBGgBEaBAIE_B?GAKCICICMAKAI?EAG?OIcCGsCAQA_@E@",
+            distanceKm = 6.5,
+            durationMin = 20.0,
+            hasPlannedTrip = true
+        )
+
+        assertTrue("Web trip should be recognized as planned", webTrip.isTripPlanned)
+        assertEquals("ifp_Ic_vpA??ZEA_@?GGyBCeAEaBAOAW?YAGEoBGgBEaBAIE_B?GAKCICICMAKAI?EAG?OIcCGsCAQA_@E@", webTrip.effectiveGeometry)
+        assertEquals("6.5 km", webTrip.formattedDistance)
+        assertEquals("20 min", webTrip.formattedDuration)
+
+        val decoded = PolylineUtils.decodeGeometry(webTrip.effectiveGeometry)
+        assertTrue("Effective geometry should decode into points", decoded.isNotEmpty())
+    }
+
+    @Test
+    fun testDecodeGeometryWithQuotesAndEscapes() {
+        val rawPolyline = "ifp_Ic_vpA??ZEA_@?GGyBCeAEaBAOAW?YAGEoBGgBEaBAIE_B?GAKCICICMAKAI?EAG?OIcCGsCAQA_@E@"
+        val quoted = "\"$rawPolyline\""
+        val decodedQuoted = PolylineUtils.decodeGeometry(quoted)
+        assertTrue("Quoted polyline should decode points", decodedQuoted.isNotEmpty())
+        assertEquals(PolylineUtils.decodePolyline(rawPolyline).size, decodedQuoted.size)
+    }
+
+    @Test
     fun testBoundingBoxCalculation() {
         val points = listOf(
             GeoPoint(28.0, 77.0),
@@ -94,3 +128,4 @@ class PolylineUtilsTest {
         assertTrue("West boundary should enclose min longitude", box.lonWest <= 77.0)
     }
 }
+
