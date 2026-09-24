@@ -7,6 +7,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -239,14 +241,19 @@ fun HomeScreenContent(
         )
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(BikerDarkBg)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(BikerDarkBg)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
         Spacer(modifier = Modifier.height(20.dp))
 
         // Hero Emblem & Cockpit Title
@@ -894,34 +901,39 @@ fun HomeScreenContent(
         Spacer(modifier = Modifier.height(40.dp))
     }
 
-    // Uber-style Plan Trip Modal
-    if (uiState.isTripPlannerOpen) {
-        TripPlannerModal(
-            startQuery = uiState.startLocationQuery,
-            destQuery = uiState.destLocationQuery,
-            selectedStartPlace = uiState.selectedStartPlace,
-            selectedDestPlace = uiState.selectedDestPlace,
-            startSuggestions = uiState.startSuggestions,
-            destSuggestions = uiState.destSuggestions,
-            isLoadingStartSuggestions = uiState.isLoadingStartSuggestions,
-            isLoadingDestSuggestions = uiState.isLoadingDestSuggestions,
-            isDetectingStartLocation = uiState.isDetectingStartLocation,
-            isCalculatingRoute = uiState.isCalculatingRoute,
-            calculatedRoute = uiState.calculatedRoute,
-            routeError = uiState.routeError,
-            isCreatingRide = uiState.isCreatingRide,
-            onStartQueryChange = onStartQueryChange,
-            onDestQueryChange = onDestQueryChange,
-            onSelectStartPlace = onSelectStartPlace,
-            onSelectDestPlace = onSelectDestPlace,
-            onUseCurrentLocationForStart = onUseCurrentLocationForStart,
-            onClearStartPlace = onClearStartPlace,
-            onClearDestPlace = onClearDestPlace,
-            onRetryRouteCalculation = onRetryRouteCalculation,
-            onCreateRideWithRoute = onCreateRideWithRoute,
-            onSkipAndCreateRide = onCreateRide,
-            onDismiss = onCloseTripPlanner
-        )
+        // Full-page Uber-style Plan Trip Screen
+        AnimatedVisibility(
+            visible = uiState.isTripPlannerOpen,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { it })
+        ) {
+            TripPlannerModal(
+                startQuery = uiState.startLocationQuery,
+                destQuery = uiState.destLocationQuery,
+                selectedStartPlace = uiState.selectedStartPlace,
+                selectedDestPlace = uiState.selectedDestPlace,
+                startSuggestions = uiState.startSuggestions,
+                destSuggestions = uiState.destSuggestions,
+                isLoadingStartSuggestions = uiState.isLoadingStartSuggestions,
+                isLoadingDestSuggestions = uiState.isLoadingDestSuggestions,
+                isDetectingStartLocation = uiState.isDetectingStartLocation,
+                isCalculatingRoute = uiState.isCalculatingRoute,
+                calculatedRoute = uiState.calculatedRoute,
+                routeError = uiState.routeError,
+                isCreatingRide = uiState.isCreatingRide,
+                onStartQueryChange = onStartQueryChange,
+                onDestQueryChange = onDestQueryChange,
+                onSelectStartPlace = onSelectStartPlace,
+                onSelectDestPlace = onSelectDestPlace,
+                onUseCurrentLocationForStart = onUseCurrentLocationForStart,
+                onClearStartPlace = onClearStartPlace,
+                onClearDestPlace = onClearDestPlace,
+                onRetryRouteCalculation = onRetryRouteCalculation,
+                onCreateRideWithRoute = onCreateRideWithRoute,
+                onSkipAndCreateRide = onCreateRide,
+                onDismiss = onCloseTripPlanner
+            )
+        }
     }
 }
 
