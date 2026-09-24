@@ -9,6 +9,7 @@ import com.google.firebase.database.ValueEventListener
 import com.ridesafe.app.data.model.RideSession
 import com.ridesafe.app.data.model.Rider
 import com.ridesafe.app.data.model.RiderStatus
+import com.ridesafe.app.data.model.TripInfo
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -75,10 +76,14 @@ class RideRepository {
     }
 
     /**
-     * Creates a new ride session in Firebase with the given rider as the initial creator.
+     * Creates a new ride session in Firebase with the given rider as the initial creator,
+     * and optionally attaches the planned trip details (start/destination/route geometry).
      * Returns a Result containing Pair(rideCode, riderId).
      */
-    suspend fun createRide(riderName: String): Result<Pair<String, String>> {
+    suspend fun createRide(
+        riderName: String,
+        tripInfo: TripInfo? = null
+    ): Result<Pair<String, String>> {
         return try {
             val riderId = getOrCreateRiderId()
             val rideCode = generateRideCode()
@@ -108,10 +113,55 @@ class RideRepository {
                 .addOnSuccessListener { Log.d("RideSafeDebug", "[FirebaseWrite] createRide initialRider write SUCCESS: code=$rideCode, riderId=$riderId") }
                 .addOnFailureListener { e -> Log.e("RideSafeDebug", "[FirebaseWrite] createRide initialRider write FAILED: ${e.message}", e) }
 
+            // Write planned route (tripInfo) if provided
+            if (tripInfo != null && tripInfo.isTripPlanned) {
+                sessionRef.child("tripInfo").setValue(tripInfo)
+                    .addOnSuccessListener { Log.d("RideSafeDebug", "[FirebaseWrite] createRide tripInfo write SUCCESS: code=$rideCode, start=${tripInfo.startName}, dest=${tripInfo.destName}") }
+                    .addOnFailureListener { e -> Log.e("RideSafeDebug", "[FirebaseWrite] createRide tripInfo write FAILED: ${e.message}", e) }
+            }
+
             Result.success(Pair(rideCode, riderId))
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * Observes the planned tripInfo node (start/dest and route geometry) in real-time.
+     * All riders (both creator and joiners) use this to display the route polyline.
+     */
+    fun observeTripInfo(rideCode: String): Flow<TripInfo?> = callbackFlow {
+        val cleanCode = rideCode.trim().uppercase()
+        val tripRef = ridesRef.child(cleanCode).child("tripInfo")
+
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val trip = if (snapshot.exists()) {
+                    snapshot.getValue(TripInfo::class.java)
+                } else {
+                    null
+                }
+                Log.d("RideSafeDebug", "[FirebaseObserve] onDataChange tripInfo: $trip for $cleanCode")
+                trySend(trip)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                close(error.toException())
+            }
+        }
+
+        tripRef.addValueEventListener(listener)
+        awaitClose {
+            tripRef.removeEventListener(listener)
+        }
+    }
+
+    /**
+     * Updates or sets tripInfo on an existing ride session.
+     */
+    fun saveTripInfo(rideCode: String, tripInfo: TripInfo) {
+        val cleanCode = rideCode.trim().uppercase()
+        ridesRef.child(cleanCode).child("tripInfo").setValue(tripInfo)
     }
 
     /**

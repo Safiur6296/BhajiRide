@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.AltRoute
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
@@ -47,6 +48,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -84,6 +86,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ridesafe.app.R
 import com.ridesafe.app.data.model.LocalRideSession
 import com.ridesafe.app.data.model.LocalRideSessionUi
+import com.ridesafe.app.data.model.PlaceSuggestion
 import com.ridesafe.app.ui.theme.BikerAmber
 import com.ridesafe.app.ui.theme.BikerBorder
 import com.ridesafe.app.ui.theme.BikerCardBg
@@ -145,7 +148,20 @@ fun HomeScreen(
             viewModel.rejoinRide(context, session, onRideJoined)
         },
         onDeleteSession = viewModel::deleteSession,
-        onRefreshSessions = viewModel::refreshSessions
+        onRefreshSessions = viewModel::refreshSessions,
+        onOpenTripPlanner = viewModel::openTripPlanner,
+        onCloseTripPlanner = viewModel::closeTripPlanner,
+        onStartQueryChange = viewModel::onStartQueryChange,
+        onDestQueryChange = viewModel::onDestQueryChange,
+        onSelectStartPlace = viewModel::selectStartPlace,
+        onSelectDestPlace = viewModel::selectDestPlace,
+        onUseCurrentLocationForStart = viewModel::detectAndSetCurrentLocationAsStart,
+        onClearStartPlace = viewModel::clearStartPlace,
+        onClearDestPlace = viewModel::clearDestPlace,
+        onRetryRouteCalculation = viewModel::calculateRoute,
+        onCreateRideWithRoute = {
+            viewModel.createRideWithPlannedTrip(context, onRideJoined)
+        }
     )
 }
 
@@ -163,7 +179,18 @@ fun HomeScreenContent(
     onJoinRide: () -> Unit,
     onRejoinRide: (LocalRideSession) -> Unit,
     onDeleteSession: (String) -> Unit,
-    onRefreshSessions: () -> Unit
+    onRefreshSessions: () -> Unit,
+    onOpenTripPlanner: () -> Unit = {},
+    onCloseTripPlanner: () -> Unit = {},
+    onStartQueryChange: (String) -> Unit = {},
+    onDestQueryChange: (String) -> Unit = {},
+    onSelectStartPlace: (PlaceSuggestion) -> Unit = {},
+    onSelectDestPlace: (PlaceSuggestion) -> Unit = {},
+    onUseCurrentLocationForStart: () -> Unit = {},
+    onClearStartPlace: () -> Unit = {},
+    onClearDestPlace: () -> Unit = {},
+    onRetryRouteCalculation: () -> Unit = {},
+    onCreateRideWithRoute: () -> Unit = {}
 ) {
     val focusManager = LocalFocusManager.current
     var sessionToDelete by remember { mutableStateOf<LocalRideSessionUi?>(null) }
@@ -514,6 +541,7 @@ fun HomeScreenContent(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Primary Button: Plan Route & Create Ride
                 Button(
                     onClick = {
                         if (!hasPermissions) {
@@ -521,7 +549,7 @@ fun HomeScreenContent(
                             return@Button
                         }
                         focusManager.clearFocus()
-                        onCreateRide()
+                        onOpenTripPlanner()
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -537,15 +565,50 @@ fun HomeScreenContent(
                             strokeWidth = 2.5.dp
                         )
                     } else {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = BikerDarkBg)
+                        Icon(Icons.AutoMirrored.Filled.AltRoute, contentDescription = null, tint = BikerDarkBg)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Create Convoy Session",
+                            text = "Plan Route & Create Ride",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Black,
                             color = BikerDarkBg
                         )
                     }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Secondary Button: Quick Start without Route
+                OutlinedButton(
+                    onClick = {
+                        if (!hasPermissions) {
+                            onRequestPermissions()
+                        } else {
+                            focusManager.clearFocus()
+                            onCreateRide()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BikerBorder),
+                    enabled = !uiState.isCreatingRide && !uiState.isJoiningRide && uiState.rejoiningCode == null
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        tint = TextMuted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Quick Start (No Route)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextSecondary
+                    )
                 }
             }
         }
@@ -829,6 +892,36 @@ fun HomeScreenContent(
         }
 
         Spacer(modifier = Modifier.height(40.dp))
+    }
+
+    // Uber-style Plan Trip Modal
+    if (uiState.isTripPlannerOpen) {
+        TripPlannerModal(
+            startQuery = uiState.startLocationQuery,
+            destQuery = uiState.destLocationQuery,
+            selectedStartPlace = uiState.selectedStartPlace,
+            selectedDestPlace = uiState.selectedDestPlace,
+            startSuggestions = uiState.startSuggestions,
+            destSuggestions = uiState.destSuggestions,
+            isLoadingStartSuggestions = uiState.isLoadingStartSuggestions,
+            isLoadingDestSuggestions = uiState.isLoadingDestSuggestions,
+            isDetectingStartLocation = uiState.isDetectingStartLocation,
+            isCalculatingRoute = uiState.isCalculatingRoute,
+            calculatedRoute = uiState.calculatedRoute,
+            routeError = uiState.routeError,
+            isCreatingRide = uiState.isCreatingRide,
+            onStartQueryChange = onStartQueryChange,
+            onDestQueryChange = onDestQueryChange,
+            onSelectStartPlace = onSelectStartPlace,
+            onSelectDestPlace = onSelectDestPlace,
+            onUseCurrentLocationForStart = onUseCurrentLocationForStart,
+            onClearStartPlace = onClearStartPlace,
+            onClearDestPlace = onClearDestPlace,
+            onRetryRouteCalculation = onRetryRouteCalculation,
+            onCreateRideWithRoute = onCreateRideWithRoute,
+            onSkipAndCreateRide = onCreateRide,
+            onDismiss = onCloseTripPlanner
+        )
     }
 }
 

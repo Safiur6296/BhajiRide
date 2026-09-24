@@ -85,6 +85,12 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
+
+    // Networking (Photon Geocoding & OSRM Routing)
+    implementation(libs.okhttp)
+
+    // Unit Testing
+    testImplementation(libs.junit)
 }
 
 firebaseAppDistribution {

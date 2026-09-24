@@ -13,9 +13,12 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.ridesafe.app.data.model.Rider
 import com.ridesafe.app.data.model.RiderStatus
+import com.ridesafe.app.data.model.TripInfo
 import com.ridesafe.app.data.repository.RideRepository
 import com.ridesafe.app.service.LocationTrackingService
 import com.ridesafe.app.util.LocationUtils
+import com.ridesafe.app.util.PolylineUtils
+import org.osmdroid.util.GeoPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +52,8 @@ data class MapUiState(
     val myStatus: RiderStatus = RiderStatus.RIDING,
     val riders: List<RiderWithDistance> = emptyList(),
     val selectedRider: RiderWithDistance? = null,
+    val tripInfo: TripInfo? = null,
+    val routePoints: List<GeoPoint> = emptyList(),
     val isStatusPickerOpen: Boolean = false,
     val isRiderListOpen: Boolean = false,
     val isLoading: Boolean = false,
@@ -64,6 +69,7 @@ class MapViewModel(
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
     private var riderObservationJob: Job? = null
+    private var tripObservationJob: Job? = null
     private var fusedClient: FusedLocationProviderClient? = null
     private var locationCallback: LocationCallback? = null
     private var lastKnownHeading: Float? = null
@@ -116,6 +122,9 @@ class MapViewModel(
 
         // Start listening to live updates from Firebase
         observeRiders()
+
+        // Start listening to planned trip route from Firebase
+        observeTripInfo()
     }
 
     private fun startLocationTracking() {
@@ -226,6 +235,35 @@ class MapViewModel(
                 .collect { ridersList ->
                     latestFirebaseRiders = ridersList
                     updateRidersWithLocalLocation()
+                }
+        }
+    }
+
+    private fun observeTripInfo() {
+        tripObservationJob?.cancel()
+        val rideCode = _uiState.value.rideCode
+
+        tripObservationJob = viewModelScope.launch {
+            repository.observeTripInfo(rideCode)
+                .catch { error ->
+                    Log.w("RideSafeDebug", "observeTripInfo error: ${error.message}")
+                }
+                .collect { trip ->
+                    val points = if (trip != null && trip.isTripPlanned) {
+                        PolylineUtils.decodeGeometry(trip.routeGeometry)
+                    } else {
+                        emptyList()
+                    }
+                    Log.d(
+                        "RideSafeDebug",
+                        "[MapViewModel] Loaded tripInfo: start='${trip?.startName}', dest='${trip?.destName}', points=${points.size}"
+                    )
+                    _uiState.update {
+                        it.copy(
+                            tripInfo = trip,
+                            routePoints = points
+                        )
+                    }
                 }
         }
     }
@@ -387,9 +425,11 @@ class MapViewModel(
         // 2. Stop foreground tracking service immediately
         LocationTrackingService.stopTracking(getApplication())
 
-        // 3. Clear real-time observation job
+        // 3. Clear real-time observation jobs
         riderObservationJob?.cancel()
         riderObservationJob = null
+        tripObservationJob?.cancel()
+        tripObservationJob = null
 
         // 4. Remove rider from Firebase asynchronously
         if (rideCode.isNotEmpty() && riderId.isNotEmpty()) {
@@ -403,6 +443,7 @@ class MapViewModel(
     override fun onCleared() {
         super.onCleared()
         riderObservationJob?.cancel()
+        tripObservationJob?.cancel()
         locationCallback?.let { callback ->
             fusedClient?.removeLocationUpdates(callback)
         }

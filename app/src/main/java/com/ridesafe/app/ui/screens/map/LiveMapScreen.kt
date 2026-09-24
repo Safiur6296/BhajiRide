@@ -25,8 +25,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.Button
@@ -84,11 +84,17 @@ import com.ridesafe.app.ui.theme.TextMuted
 import com.ridesafe.app.ui.theme.TextPrimary
 import com.ridesafe.app.ui.theme.TextSecondary
 import com.ridesafe.app.util.LocationUtils
+import androidx.compose.material.icons.automirrored.filled.AltRoute
+import com.ridesafe.app.data.model.TripInfo
+import com.ridesafe.app.ui.theme.StatusBlue
+import com.ridesafe.app.ui.theme.StatusGreen
+import com.ridesafe.app.util.PolylineUtils
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker as OsmMarker
+import org.osmdroid.views.overlay.Polyline as OsmPolyline
 
 /**
  * Creates a custom map pin bitmap with the rider's name and status emoji.
@@ -178,6 +184,123 @@ private fun createRiderMarkerBitmap(name: String, status: RiderStatus, isCurrent
 }
 
 /**
+ * Creates a distinctive custom pin for Start and Destination markers on the map,
+ * with bright border accents (green for Start, coral red for Destination)
+ * and label text displaying the location name.
+ */
+private fun createTripMarkerBitmap(name: String, isDestination: Boolean): Bitmap {
+    val prefix = if (isDestination) "🏁" else "🚩"
+    val label = if (isDestination) "DESTINATION" else "START"
+    val placeName = name.trim().ifEmpty { if (isDestination) "Destination" else "Start" }
+    val displayName = "$prefix $placeName"
+
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 32f
+        color = android.graphics.Color.WHITE
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+
+    val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 20f
+        color = if (isDestination) android.graphics.Color.parseColor("#FFC107") else android.graphics.Color.parseColor("#69F0AE")
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+
+    val textWidth = textPaint.measureText(displayName)
+    val labelWidth = labelPaint.measureText(label)
+    val contentWidth = maxOf(textWidth, labelWidth)
+    val horizontalPadding = 26f
+
+    val pillWidth = (contentWidth + horizontalPadding * 2f).coerceAtLeast(140f)
+    val pillHeight = 78f
+    val pointerHeight = 20f
+    val totalHeight = pillHeight + pointerHeight
+
+    val bitmap = Bitmap.createBitmap(pillWidth.toInt(), totalHeight.toInt(), Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    val bgColor = android.graphics.Color.parseColor("#171A21")
+    val strokeColor = if (isDestination) {
+        android.graphics.Color.parseColor("#FF5252") // Coral Red
+    } else {
+        android.graphics.Color.parseColor("#00E676") // Emerald Green
+    }
+
+    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = bgColor
+        style = Paint.Style.FILL
+    }
+
+    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = strokeColor
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+    }
+
+    val fillAccentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = strokeColor
+        style = Paint.Style.FILL
+    }
+
+    // Draw pill badge
+    val rect = RectF(4f, 4f, pillWidth - 4f, pillHeight - 4f)
+    canvas.drawRoundRect(rect, 36f, 36f, bgPaint)
+    canvas.drawRoundRect(rect, 36f, 36f, strokePaint)
+
+    // Draw bottom pointer pin
+    val centerX = pillWidth / 2f
+    val pointerPath = Path().apply {
+        moveTo(centerX - 12f, pillHeight - 4f)
+        lineTo(centerX + 12f, pillHeight - 4f)
+        lineTo(centerX, totalHeight - 2f)
+        close()
+    }
+    canvas.drawPath(pointerPath, fillAccentPaint)
+
+    // Draw small uppercase label
+    val labelX = (pillWidth - labelWidth) / 2f
+    canvas.drawText(label, labelX, 28f, labelPaint)
+
+    // Draw display name
+    val textX = (pillWidth - textWidth) / 2f
+    val textY = 62f
+    canvas.drawText(displayName, textX, textY, textPaint)
+
+    return bitmap
+}
+
+/**
+ * Zooms and pans the camera to tightly enclose all active riders AND the planned route points.
+ */
+private fun zoomToFitContent(
+    mapView: MapView?,
+    riders: List<RiderWithDistance>,
+    routePoints: List<GeoPoint>,
+    tripInfo: TripInfo?
+) {
+    val mv = mapView ?: return
+    val additionalPoints = mutableListOf<GeoPoint>()
+    riders.forEach { r ->
+        if (r.rider.lat != 0.0 && r.rider.lng != 0.0) {
+            additionalPoints.add(GeoPoint(r.rider.lat, r.rider.lng))
+        }
+    }
+    if (tripInfo != null && tripInfo.isTripPlanned) {
+        if (tripInfo.startLat != 0.0 && tripInfo.startLng != 0.0) {
+            additionalPoints.add(GeoPoint(tripInfo.startLat, tripInfo.startLng))
+        }
+        if (tripInfo.destLat != 0.0 && tripInfo.destLng != 0.0) {
+            additionalPoints.add(GeoPoint(tripInfo.destLat, tripInfo.destLng))
+        }
+    }
+
+    val boundingBox = PolylineUtils.calculateRouteBoundingBox(routePoints, additionalPoints)
+    if (boundingBox != null) {
+        mv.zoomToBoundingBox(boundingBox, true, 130)
+    }
+}
+
+/**
  * LiveMapScreen is the main in-ride dashboard.
  * Shows all riders on an OpenStreetMap (osmdroid) map in real time, current stop statuses,
  * and quick-access controls for group communication.
@@ -215,22 +338,35 @@ fun LiveMapScreen(
         }
     }
 
-    // Center camera immediately on the device's real GPS position
+    // Center camera immediately on the device's real GPS position or route
     LaunchedEffect(Unit) {
         try {
             fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
                 android.util.Log.d("RideSafeDebug", "[MapRender] LiveMapScreen lastLocation: loc=$loc, hasCentered=$hasCenteredInitialLocation")
                 if (loc != null && !hasCenteredInitialLocation) {
-                    mapView?.controller?.let { controller ->
-                        controller.setZoom(15.5)
-                        controller.setCenter(GeoPoint(loc.latitude, loc.longitude))
+                    if (uiState.routePoints.isNotEmpty()) {
+                        zoomToFitContent(mapView, uiState.riders, uiState.routePoints, uiState.tripInfo)
+                        hasCenteredInitialLocation = true
+                    } else {
+                        mapView?.controller?.let { controller ->
+                            controller.setZoom(15.5)
+                            controller.setCenter(GeoPoint(loc.latitude, loc.longitude))
+                        }
+                        hasCenteredInitialLocation = true
                     }
-                    hasCenteredInitialLocation = true
                     android.util.Log.d("RideSafeDebug", "[MapRender] Camera centered on real GPS position: ${loc.latitude}, ${loc.longitude}")
                 }
             }
         } catch (e: SecurityException) {
             android.util.Log.e("RideSafeDebug", "[MapRender] SecurityException on lastLocation: ${e.message}", e)
+        }
+    }
+
+    // Automatically zoom to fit route when route points load
+    LaunchedEffect(uiState.routePoints.size) {
+        if (uiState.routePoints.isNotEmpty()) {
+            zoomToFitContent(mapView, uiState.riders, uiState.routePoints, uiState.tripInfo)
+            hasCenteredInitialLocation = true
         }
     }
 
@@ -241,9 +377,13 @@ fun LiveMapScreen(
         val lng = currentRider?.rider?.lng ?: 0.0
         android.util.Log.d("RideSafeDebug", "[MapRender] LaunchedEffect currentRider coords: lat=$lat, lng=$lng, hasCentered=$hasCenteredInitialLocation")
         if (!hasCenteredInitialLocation && lat != 0.0 && lng != 0.0) {
-            mapView?.controller?.let { controller ->
-                controller.setZoom(16.0)
-                controller.animateTo(GeoPoint(lat, lng), 16.0, 800L)
+            if (uiState.routePoints.isNotEmpty()) {
+                zoomToFitContent(mapView, uiState.riders, uiState.routePoints, uiState.tripInfo)
+            } else {
+                mapView?.controller?.let { controller ->
+                    controller.setZoom(16.0)
+                    controller.animateTo(GeoPoint(lat, lng), 16.0, 800L)
+                }
             }
             hasCenteredInitialLocation = true
             android.util.Log.d("RideSafeDebug", "[MapRender] Camera animated to current rider position: ($lat, $lng)")
@@ -259,10 +399,10 @@ fun LiveMapScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(BikerDarkBg)) {
-        // Extract rider data so Compose tracks it as a dependency for recomposition.
-        // Reading uiState.riders OUTSIDE the AndroidView lambda ensures Compose knows
-        // to re-invoke update{} whenever the riders list changes (status, position, etc.)
+        // Extract rider & trip data so Compose tracks them as dependencies for recomposition.
         val riders = uiState.riders
+        val tripInfo = uiState.tripInfo
+        val routePoints = uiState.routePoints
 
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -276,41 +416,92 @@ fun LiveMapScreen(
                     zoomController.setVisibility(
                         org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER
                     )
-                    // Set initial zoom and center (will be overridden by GPS)
+                    // Set initial zoom and center (will be overridden by GPS / route)
                     controller.setZoom(14.0)
                     controller.setCenter(GeoPoint(28.6139, 77.2090))
-
-                    // Center camera immediately if location available
-                    try {
-                        fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
-                            if (loc != null && !hasCenteredInitialLocation) {
-                                controller.setZoom(15.5)
-                                controller.setCenter(GeoPoint(loc.latitude, loc.longitude))
-                                hasCenteredInitialLocation = true
-                            }
-                        }
-                    } catch (e: SecurityException) {
-                    }
 
                     // Start the map's tile loading
                     onResume()
 
-                    // Store reference for use in Compose callbacks (recenter, etc.)
+                    // Store reference for use in Compose callbacks
                     mapView = this
                 }
             },
             update = { mv ->
-                // Clear all existing marker overlays and re-add from current state.
+                // Clear all existing overlays and re-add from current state.
                 mv.overlays.clear()
-                android.util.Log.d("RideSafeDebug", "[MapRender] Updating map overlays for ${riders.size} riders in UI state:")
+                android.util.Log.d("RideSafeDebug", "[MapRender] Updating map overlays for ${riders.size} riders, routePoints=${routePoints.size}:")
 
+                // 1. Draw planned route polyline if present (drawn UNDER markers)
+                if (routePoints.isNotEmpty()) {
+                    val routePolyline = OsmPolyline(mv).apply {
+                        setPoints(routePoints)
+                        outlinePaint.apply {
+                            color = android.graphics.Color.parseColor("#00B0FF") // Electric route blue
+                            strokeWidth = 16f // 6-8dp width
+                            strokeCap = Paint.Cap.ROUND
+                            strokeJoin = Paint.Join.ROUND
+                            isAntiAlias = true
+                        }
+                        title = if (tripInfo != null && tripInfo.isTripPlanned) {
+                            "Route: ${tripInfo.formattedDistance} (${tripInfo.formattedDuration})"
+                        } else {
+                            "Planned Route"
+                        }
+                    }
+                    mv.overlays.add(routePolyline)
+                }
+
+                // 2. Add Start point marker if trip planned
+                if (tripInfo != null && tripInfo.isTripPlanned && tripInfo.startLat != 0.0 && tripInfo.startLng != 0.0) {
+                    val startPos = GeoPoint(tripInfo.startLat, tripInfo.startLng)
+                    val startKey = "start_${tripInfo.startName}"
+                    val startBitmap = markerBitmapCache.getOrPut(startKey) {
+                        createTripMarkerBitmap(tripInfo.startName, isDestination = false)
+                    }
+                    val startMarker = OsmMarker(mv).apply {
+                        position = startPos
+                        title = "Start: ${tripInfo.startName}"
+                        snippet = "Convoy Departure Point"
+                        icon = BitmapDrawable(mv.context.resources, startBitmap)
+                        setAnchor(OsmMarker.ANCHOR_CENTER, OsmMarker.ANCHOR_BOTTOM)
+                        setOnMarkerClickListener { marker, _ ->
+                            marker.showInfoWindow()
+                            true
+                        }
+                    }
+                    mv.overlays.add(startMarker)
+                }
+
+                // 3. Add Destination point marker if trip planned
+                if (tripInfo != null && tripInfo.isTripPlanned && tripInfo.destLat != 0.0 && tripInfo.destLng != 0.0) {
+                    val destPos = GeoPoint(tripInfo.destLat, tripInfo.destLng)
+                    val destKey = "dest_${tripInfo.destName}"
+                    val destBitmap = markerBitmapCache.getOrPut(destKey) {
+                        createTripMarkerBitmap(tripInfo.destName, isDestination = true)
+                    }
+                    val destMarker = OsmMarker(mv).apply {
+                        position = destPos
+                        title = "Destination: ${tripInfo.destName}"
+                        snippet = if (tripInfo.formattedDistance.isNotEmpty()) {
+                            "Total Distance: ${tripInfo.formattedDistance} (${tripInfo.formattedDuration})"
+                        } else {
+                            "Convoy Destination"
+                        }
+                        icon = BitmapDrawable(mv.context.resources, destBitmap)
+                        setAnchor(OsmMarker.ANCHOR_CENTER, OsmMarker.ANCHOR_BOTTOM)
+                        setOnMarkerClickListener { marker, _ ->
+                            marker.showInfoWindow()
+                            true
+                        }
+                    }
+                    mv.overlays.add(destMarker)
+                }
+
+                // 4. Add Rider markers (on top)
                 riders.forEach { riderItem ->
                     val rider = riderItem.rider
                     if (rider.lat != 0.0 && rider.lng != 0.0) {
-                        android.util.Log.d(
-                            "RideSafeDebug",
-                            "[MapRender] -> ADDING MARKER for '${rider.name}' (isCurrentUser=${riderItem.isCurrentUser}, id=${rider.id}) at (${rider.lat}, ${rider.lng})"
-                        )
                         val position = GeoPoint(rider.lat, rider.lng)
                         val status = rider.riderStatus
 
@@ -326,23 +517,17 @@ fun LiveMapScreen(
                             "Status: ${status.displayName} • ${riderItem.formattedDistance} • ${LocationUtils.formatTimeAgo(rider.lastUpdated)}"
                         }
 
-                        // Get or create the custom pin bitmap displaying name + status emoji
                         val cacheKey = "${rider.id}_${rider.name}_${status.name}_${riderItem.isCurrentUser}"
                         val markerBitmap = markerBitmapCache.getOrPut(cacheKey) {
                             createRiderMarkerBitmap(rider.name, status, riderItem.isCurrentUser)
                         }
 
-                        // Create an osmdroid Marker and configure it
                         val marker = OsmMarker(mv).apply {
                             this.position = position
                             this.title = titleText
                             this.snippet = snippetText
-                            // Wrap the Bitmap in a BitmapDrawable
                             this.icon = BitmapDrawable(mv.context.resources, markerBitmap)
-                            // Anchor at bottom-center of the pin image so the pointer
-                            // tip sits exactly on the rider's GPS coordinates
                             setAnchor(OsmMarker.ANCHOR_CENTER, OsmMarker.ANCHOR_BOTTOM)
-                            // Handle marker tap — select rider and show info window
                             setOnMarkerClickListener { clickedMarker, _ ->
                                 viewModel.selectRider(riderItem)
                                 clickedMarker.showInfoWindow()
@@ -350,55 +535,60 @@ fun LiveMapScreen(
                             }
                         }
                         mv.overlays.add(marker)
-                    } else {
-                        android.util.Log.w(
-                            "RideSafeDebug",
-                            "[MapRender] -> SKIPPING MARKER for '${rider.name}' (isCurrentUser=${riderItem.isCurrentUser}, id=${rider.id}) because lat=${rider.lat}, lng=${rider.lng}"
-                        )
                     }
                 }
 
-                // Trigger a redraw so the new markers appear immediately
+                // Trigger a redraw so all new overlays appear immediately
                 mv.invalidate()
             }
         )
 
-        // 2. Top Header Bar: Ride Code + Copy Button + Leave Button
-        TopRideBar(
-            rideCode = uiState.rideCode,
-            riderCount = uiState.riders.size,
-            onCopyCode = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText("BhaijiRide Code", uiState.rideCode)
-                clipboard.setPrimaryClip(clip)
-                Toast.makeText(context, "Ride code copied to clipboard!", Toast.LENGTH_SHORT).show()
-            },
-            onLeaveClick = {
-                viewModel.leaveRide(onLeaveComplete = onLeaveRide)
-            },
+        // 2. Top Header Panels: Ride Code + Trip Overview Banner + Emergency Alert
+        Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
-                .padding(16.dp)
-        )
-
-        // 2.5 Emergency Alert Banner: Displays when any other convoy rider sets status to EMERGENCY
-        val emergencyRiders = uiState.riders.filter { !it.isCurrentUser && it.rider.riderStatus == RiderStatus.EMERGENCY }
-        if (emergencyRiders.isNotEmpty()) {
-            EmergencyAlertBanner(
-                emergencyRiders = emergencyRiders,
-                onLocateRider = { emergencyRider ->
-                    val lat = emergencyRider.rider.lat
-                    val lng = emergencyRider.rider.lng
-                    if (lat != 0.0 && lng != 0.0) {
-                        mapView?.controller?.animateTo(GeoPoint(lat, lng), 17.0, 1000L)
-                    }
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            TopRideBar(
+                rideCode = uiState.rideCode,
+                riderCount = uiState.riders.size,
+                onCopyCode = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = ClipData.newPlainText("BhaijiRide Code", uiState.rideCode)
+                    clipboard.setPrimaryClip(clip)
+                    Toast.makeText(context, "Ride code copied to clipboard!", Toast.LENGTH_SHORT).show()
                 },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(top = 74.dp, start = 16.dp, end = 16.dp)
+                onLeaveClick = {
+                    viewModel.leaveRide(onLeaveComplete = onLeaveRide)
+                }
             )
+
+            // 2.2 Planned Route Overview Pill (appears when trip route is present)
+            if (tripInfo != null && tripInfo.isTripPlanned) {
+                TripOverviewBanner(
+                    tripInfo = tripInfo,
+                    onFitRouteClick = {
+                        zoomToFitContent(mapView, uiState.riders, uiState.routePoints, tripInfo)
+                    }
+                )
+            }
+
+            // 2.5 Emergency Alert Banner: Displays when any other convoy rider sets status to EMERGENCY
+            val emergencyRiders = uiState.riders.filter { !it.isCurrentUser && it.rider.riderStatus == RiderStatus.EMERGENCY }
+            if (emergencyRiders.isNotEmpty()) {
+                EmergencyAlertBanner(
+                    emergencyRiders = emergencyRiders,
+                    onLocateRider = { emergencyRider ->
+                        val lat = emergencyRider.rider.lat
+                        val lng = emergencyRider.rider.lng
+                        if (lat != 0.0 && lng != 0.0) {
+                            mapView?.controller?.animateTo(GeoPoint(lat, lng), 17.0, 1000L)
+                        }
+                    }
+                )
+            }
         }
 
         // 3. Proximity Radar Box: Shows relative distance and ahead/behind status for all riders
@@ -417,12 +607,16 @@ fun LiveMapScreen(
                 .padding(start = 16.dp, end = 16.dp, bottom = 86.dp)
         )
 
-        // 4. Bottom Control Dock: Stop Status Button + Rider List + Recenter
+        // 4. Bottom Control Dock: Stop Status Button + Rider List + Fit Route + Recenter
         BottomControlDock(
             myStatus = uiState.myStatus,
             riderCount = uiState.riders.size,
+            hasPlannedRoute = tripInfo != null && tripInfo.isTripPlanned,
             onStatusClick = { viewModel.openStatusPicker() },
             onRiderListClick = { viewModel.openRiderList() },
+            onFitRouteClick = {
+                zoomToFitContent(mapView, uiState.riders, uiState.routePoints, tripInfo)
+            },
             onRecenterClick = {
                 val lat = currentRider?.rider?.lat ?: 0.0
                 val lng = currentRider?.rider?.lng ?: 0.0
@@ -566,7 +760,7 @@ private fun TopRideBar(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Filled.ExitToApp,
+                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                     contentDescription = "Leave Ride",
                     tint = StatusRed,
                     modifier = Modifier.size(20.dp)
@@ -652,8 +846,10 @@ private fun EmergencyAlertBanner(
 private fun BottomControlDock(
     myStatus: RiderStatus,
     riderCount: Int,
+    hasPlannedRoute: Boolean = false,
     onStatusClick: () -> Unit,
     onRiderListClick: () -> Unit,
+    onFitRouteClick: () -> Unit = {},
     onRecenterClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -721,6 +917,26 @@ private fun BottomControlDock(
             )
         }
 
+        // Fit Route & Convoy button (visible when a route is planned)
+        if (hasPlannedRoute) {
+            Box(
+                modifier = Modifier
+                    .size(54.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(BikerCardBg.copy(alpha = 0.95f))
+                    .border(1.dp, StatusBlue.copy(alpha = 0.7f), RoundedCornerShape(18.dp))
+                    .clickable(onClick = onFitRouteClick),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.AltRoute,
+                    contentDescription = "Fit Route & Convoy",
+                    tint = StatusBlue,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+
         // Recenter button
         Box(
             modifier = Modifier
@@ -737,6 +953,85 @@ private fun BottomControlDock(
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
+        }
+    }
+}
+
+/**
+ * Floating banner displaying planned route summary (start -> destination, distance & duration).
+ * Tapping it animates camera to fit both the entire route and convoy riders.
+ */
+@Composable
+private fun TripOverviewBanner(
+    tripInfo: TripInfo,
+    onFitRouteClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(BikerCardBg.copy(alpha = 0.94f))
+            .border(1.dp, StatusBlue.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
+            .clickable(onClick = onFitRouteClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(StatusBlue.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.AltRoute,
+                        contentDescription = null,
+                        tint = StatusBlue,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "${tripInfo.startName.ifEmpty { "Start" }} ➔ ${tripInfo.destName.ifEmpty { "Destination" }}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${tripInfo.formattedDistance} · ${tripInfo.formattedDuration} · Tap to fit view",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = StatusBlue,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(BikerSurfaceElevated)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "FIT ROUTE",
+                    color = StatusBlue,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 10.sp
+                )
+            }
         }
     }
 }
