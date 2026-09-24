@@ -33,6 +33,33 @@ class AppUpdateManager(private val context: Context) {
         private const val TAG = "BhaijiRideUpdate"
         private const val GITHUB_REPO = "Safiur6296/BhajiRide"
         private const val GITHUB_API_URL = "https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+
+        /**
+         * Parses numeric build number from release tag like "v1.0.17" -> 27L (accounting for buildNumber + 10).
+         */
+        fun extractVersionCodeFromTag(tag: String): Long {
+            val cleaned = tag.removePrefix("v").trim()
+            val parts = cleaned.split(".")
+            val buildNum = parts.lastOrNull()?.toLongOrNull() ?: 0L
+            return if (buildNum > 0) buildNum + 10L else 0L
+        }
+
+        /**
+         * Compares semantic versions (e.g. "v1.0.17" vs "1.0.15").
+         * Returns true if remoteVersion is strictly newer than currentVersion.
+         */
+        fun isVersionNewer(remoteVersion: String, currentVersion: String): Boolean {
+            val remoteParts = remoteVersion.removePrefix("v").trim().split(".").mapNotNull { it.toIntOrNull() }
+            val currentParts = currentVersion.removePrefix("v").trim().split(".").mapNotNull { it.toIntOrNull() }
+            val maxLen = maxOf(remoteParts.size, currentParts.size)
+            for (i in 0 until maxLen) {
+                val r = remoteParts.getOrElse(i) { 0 }
+                val c = currentParts.getOrElse(i) { 0 }
+                if (r > c) return true
+                if (r < c) return false
+            }
+            return false
+        }
     }
 
     private val database by lazy {
@@ -94,17 +121,18 @@ class AppUpdateManager(private val context: Context) {
                 val body = json.optString("body", "What's new in this release.")
                 val assets = json.optJSONArray("assets")
 
-                // Extract numeric version code from tag name (e.g. "v1.0.15" -> 15 or build number)
+                // Extract numeric version code and check semantic version
                 val parsedCode = extractVersionCodeFromTag(tagName)
+                val isNewer = isVersionNewer(tagName, BuildConfig.VERSION_NAME) || (parsedCode > currentVersionCode)
 
-                if (assets != null && assets.length() > 0 && parsedCode > currentVersionCode) {
+                if (assets != null && assets.length() > 0 && isNewer) {
                     for (i in 0 until assets.length()) {
                         val asset = assets.getJSONObject(i)
                         val name = asset.optString("name", "")
                         if (name.endsWith(".apk", ignoreCase = true)) {
                             val downloadUrl = asset.optString("browser_download_url", "")
                             if (downloadUrl.isNotBlank()) {
-                                Log.i(TAG, "Update found via GitHub Releases: $tagName (code $parsedCode)")
+                                Log.i(TAG, "Update found via GitHub Releases: $tagName (code $parsedCode vs current $currentVersionCode, current ver: ${BuildConfig.VERSION_NAME})")
                                 return@withContext AppUpdateInfo(
                                     versionCode = parsedCode,
                                     versionName = tagName.removePrefix("v"),
@@ -253,14 +281,5 @@ class AppUpdateManager(private val context: Context) {
             return connection
         }
         throw IOException("Too many redirects while accessing $initialUrl")
-    }
-
-    /**
-     * Parses numeric build number from release tag like "v1.0.24" -> 24.
-     */
-    private fun extractVersionCodeFromTag(tag: String): Long {
-        val cleaned = tag.removePrefix("v").trim()
-        val parts = cleaned.split(".")
-        return parts.lastOrNull()?.toLongOrNull() ?: 0L
     }
 }
