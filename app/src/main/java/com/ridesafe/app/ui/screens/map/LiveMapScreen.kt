@@ -667,7 +667,7 @@ fun LiveMapScreen(
                 riderCount = uiState.riders.size,
                 onCopyCode = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("BhaijiRide Code", uiState.rideCode)
+                    val clip = ClipData.newPlainText("PackSync Code", uiState.rideCode)
                     clipboard.setPrimaryClip(clip)
                     Toast.makeText(context, "Ride code copied to clipboard!", Toast.LENGTH_SHORT).show()
                 },

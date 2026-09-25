@@ -28,12 +28,12 @@ import java.net.URL
 
 /**
  * AppUpdateManager handles seamless in-app checking, downloading, and installing
- * of APK updates directly within BhaijiRide without relying on Firebase App Tester.
+ * of APK updates directly within PackSync without relying on Firebase App Tester.
  */
 class AppUpdateManager(private val context: Context) {
 
     companion object {
-        private const val TAG = "BhaijiRideUpdate"
+        private const val TAG = "PackSyncUpdate"
         private const val GITHUB_REPO = "Safiur6296/BhajiRide"
         private const val GITHUB_LATEST_API_URL = "https://api.github.com/repos/$GITHUB_REPO/releases/latest"
         private const val GITHUB_RELEASES_API_URL = "https://api.github.com/repos/$GITHUB_REPO/releases?per_page=1"
@@ -82,7 +82,7 @@ class AppUpdateManager(private val context: Context) {
         val updatesDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
             ?: File(context.externalCacheDir ?: context.cacheDir, "apk_updates")
         updatesDir.mkdirs()
-        return File(updatesDir, "BhaijiRide-$versionName.apk")
+        return File(updatesDir, "PackSync-$versionName.apk")
     }
 
     /**
@@ -146,7 +146,7 @@ class AppUpdateManager(private val context: Context) {
                     connectTimeout = 8000
                     readTimeout = 8000
                     setRequestProperty("Accept", "application/vnd.github.v3+json")
-                    setRequestProperty("User-Agent", "BhaijiRide-Android")
+                    setRequestProperty("User-Agent", "PackSync-Android")
                 }
 
                 val responseCode = connection.responseCode
@@ -277,7 +277,7 @@ class AppUpdateManager(private val context: Context) {
     }
 
     /**
-     * Launches the system settings screen where the user can enable unknown app sources for BhaijiRide.
+     * Launches the system settings screen where the user can enable unknown app sources for PackSync.
      */
     fun requestInstallPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -365,7 +365,7 @@ class AppUpdateManager(private val context: Context) {
                 connectTimeout = 15000
                 readTimeout = 30000
                 instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "BhaijiRide-App")
+                setRequestProperty("User-Agent", "PackSync-App")
             }
             val status = connection.responseCode
             if (status == HttpURLConnection.HTTP_MOVED_TEMP ||

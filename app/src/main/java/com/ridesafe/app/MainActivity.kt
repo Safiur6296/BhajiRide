@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     Toast.makeText(
                         this,
-                        "BhaijiRide needs location permissions to track group rides.",
+                        "PackSync needs location permissions to track group rides.",
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
             val coroutineScope = rememberCoroutineScope()
 
             val onCheckForUpdates: () -> Unit = {
-                Toast.makeText(this@MainActivity, "Checking for BhaijiRide updates...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "Checking for PackSync updates...", Toast.LENGTH_SHORT).show()
                 coroutineScope.launch {
                     try {
                         val update = updateManager.checkForUpdates(forceCheck = false)
@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
                         } else {
                             Toast.makeText(
                                 this@MainActivity,
-                                "BhaijiRide is up to date (v${BuildConfig.VERSION_NAME})",
+                                "PackSync is up to date (v${BuildConfig.VERSION_NAME})",
                                 Toast.LENGTH_LONG
                             ).show()
                         }
@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
                         availableUpdate = update
                     }
                 } catch (e: Exception) {
-                    android.util.Log.w("BhaijiRide", "Silent update check failed: ${e.message}")
+                    android.util.Log.w("PackSync", "Silent update check failed: ${e.message}")
                 }
             }
 

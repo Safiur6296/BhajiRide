@@ -71,7 +71,7 @@ class RideSafeApp : Application() {
             // 2. Critical Emergency Alert channel (high importance, heads-up display, vibration & sound)
             val emergencyChannel = NotificationChannel(
                 EMERGENCY_CHANNEL_ID,
-                "BhaijiRide Emergency Alerts",
+                "PackSync Emergency Alerts",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Critical alerts when a rider in your convoy triggers emergency status"

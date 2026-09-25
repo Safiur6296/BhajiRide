@@ -362,7 +362,7 @@ fun UpdateDialog(
                                 if (!updateManager.canInstallPackages()) {
                                     Toast.makeText(
                                         context,
-                                        "Please allow BhaijiRide to install apps in Android Settings",
+                                        "Please allow PackSync to install apps in Android Settings",
                                         Toast.LENGTH_LONG
                                     ).show()
                                     updateManager.requestInstallPermission()
@@ -377,7 +377,7 @@ fun UpdateDialog(
                                 if (!updateManager.canInstallPackages()) {
                                     Toast.makeText(
                                         context,
-                                        "Please allow BhaijiRide to install apps in Android Settings",
+                                        "Please allow PackSync to install apps in Android Settings",
                                         Toast.LENGTH_LONG
                                     ).show()
                                     updateManager.requestInstallPermission()

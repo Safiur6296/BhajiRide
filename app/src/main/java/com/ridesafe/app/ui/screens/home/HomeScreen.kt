@@ -341,7 +341,7 @@ fun HomeScreenContent(
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.app_logo),
-                        contentDescription = "BhaijiRide App Logo",
+                        contentDescription = "PackSync App Logo",
                         modifier = Modifier
                             .size(88.dp)
                             .clip(CircleShape)
@@ -352,10 +352,10 @@ fun HomeScreenContent(
             Spacer(modifier = Modifier.height(18.dp))
 
             // -------------------------------------------------------------
-            // 2. Bold large app name "BHAIJI RIDE"
+            // 2. Bold large app name "PACKSYNC"
             // -------------------------------------------------------------
             Text(
-                text = "BHAIJI RIDE",
+                text = "PACKSYNC",
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontFamily = FontFamily.SansSerif,
                     fontWeight = FontWeight.Black,
@@ -387,7 +387,7 @@ fun HomeScreenContent(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "GPS CONVOY & EMERGENCY SAFETY",
+                    text = "NEVER LOSE YOUR PACK AGAIN",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.2.sp,
@@ -465,7 +465,7 @@ fun HomeScreenContent(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "BhaijiRide requires GPS to share live positions and emergency alerts.",
+                                    text = "PackSync requires GPS to share live positions and emergency alerts.",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = HomeTextPrimary,
                                     fontSize = 12.sp

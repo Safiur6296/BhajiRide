@@ -206,7 +206,7 @@ class LocationTrackingService : Service() {
         }
 
         return NotificationCompat.Builder(this, RideSafeApp.LOCATION_CHANNEL_ID)
-            .setContentTitle("BhaijiRide • Group Tracking Active")
+            .setContentTitle("PackSync • Never Lose Your Pack")
             .setContentText(statusText)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(pendingOpenApp)

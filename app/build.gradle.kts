@@ -109,6 +109,6 @@ dependencies {
 firebaseAppDistribution {
     appId = "1:345773121112:android:c73030f59b40dc8306f42d"
     artifactType = "APK"
-    releaseNotes = "BhaijiRide continuous update"
+    releaseNotes = "PackSync continuous update"
     groups = "riders"
 }

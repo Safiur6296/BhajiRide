@@ -1,5 +1,6 @@
 <resources>
-    <string name="app_name">BhaijiRide</string>
-    <string name="tracking_notification_channel_name">BhaijiRide Tracking</string>
+    <string name="app_name">PackSync</string>
+    <string name="app_tagline">Never lose your pack again.</string>
+    <string name="tracking_notification_channel_name">PackSync Tracking</string>
     <string name="tracking_notification_channel_desc">Active motorbike ride location tracking service</string>
 </resources>
